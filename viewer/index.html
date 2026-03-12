@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KKnD Animation Viewer</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: #1a1a1a;
+      color: #e0e0e0;
+    }
+    #ui {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 12px;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      z-index: 10;
+    }
+    #ui label { display: flex; align-items: center; gap: 6px; }
+    #ui select {
+      padding: 6px 10px;
+      background: #2a2a2a;
+      color: #e0e0e0;
+      border: 1px solid #444;
+      border-radius: 4px;
+    }
+    #ui button {
+      padding: 6px 12px;
+      background: #3a7bd5;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #ui button:hover { background: #4a8be5; }
+    #ui button.secondary { background: #444; }
+    #canvas-wrapper {
+      position: absolute;
+      top: 60px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #111;
+    }
+    canvas {
+      display: block;
+      background: #222;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <label>
+      Sprite:
+      <select id="sprite-select">
+        <option value="">-- Select sprite --</option>
+      </select>
+    </label>
+    <label>
+      Direction / Anim:
+      <select id="dir-select">
+        <option value="all">All frames</option>
+      </select>
+    </label>
+    <label>
+      <input type="range" id="speed" min="1" max="60" value="15" />
+      Speed
+    </label>
+    <button id="play-btn">Play</button>
+    <button id="step-btn" class="secondary">Step</button>
+    <span id="frame-info"></span>
+  </div>
+  <div id="canvas-wrapper"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

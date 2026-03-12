@@ -1,0 +1,326 @@
+[
+  {
+    "path": "effects/extras",
+    "stem": "Extras"
+  },
+  {
+    "path": "effects/flame",
+    "stem": "Flame"
+  },
+  {
+    "path": "effects/oil",
+    "stem": "Oil"
+  },
+  {
+    "path": "effects/shrapnels",
+    "stem": "Shrapnels"
+  },
+  {
+    "path": "ui/bigfont",
+    "stem": "BigFont"
+  },
+  {
+    "path": "ui/buttons",
+    "stem": "Buttons"
+  },
+  {
+    "path": "ui/cursors",
+    "stem": "Cursors"
+  },
+  {
+    "path": "ui/fontmini",
+    "stem": "FontMini"
+  },
+  {
+    "path": "ui/fontregular",
+    "stem": "FontRegular"
+  },
+  {
+    "path": "ui/gui",
+    "stem": "Gui"
+  },
+  {
+    "path": "ui/uifont",
+    "stem": "UiFont"
+  },
+  {
+    "path": "units/alchemyhall",
+    "stem": "AlchemyHall"
+  },
+  {
+    "path": "units/allterrainvehicle",
+    "stem": "AllTerrainVehicle"
+  },
+  {
+    "path": "units/barragecraft",
+    "stem": "BarrageCraft"
+  },
+  {
+    "path": "units/beastenclosure",
+    "stem": "BeastEnclosure"
+  },
+  {
+    "path": "units/beetle",
+    "stem": "Beetle"
+  },
+  {
+    "path": "units/berserker",
+    "stem": "Berserker"
+  },
+  {
+    "path": "units/bike",
+    "stem": "Bike"
+  },
+  {
+    "path": "units/blacksmith",
+    "stem": "Blacksmith"
+  },
+  {
+    "path": "units/bunker",
+    "stem": "Bunker"
+  },
+  {
+    "path": "units/cannontank",
+    "stem": "CannonTank"
+  },
+  {
+    "path": "units/cannontower",
+    "stem": "CannonTower"
+  },
+  {
+    "path": "units/clanhall",
+    "stem": "Clanhall"
+  },
+  {
+    "path": "units/clanhallwagon",
+    "stem": "ClanhallWagon"
+  },
+  {
+    "path": "units/completemission",
+    "stem": "CompleteMission"
+  },
+  {
+    "path": "units/crab",
+    "stem": "Crab"
+  },
+  {
+    "path": "units/detentioncenter",
+    "stem": "DetentionCenter"
+  },
+  {
+    "path": "units/direwolf",
+    "stem": "DireWolf"
+  },
+  {
+    "path": "units/dummy",
+    "stem": "Dummy"
+  },
+  {
+    "path": "units/elpresidente",
+    "stem": "ElPresidente"
+  },
+  {
+    "path": "units/flameatv",
+    "stem": "FlameAtv"
+  },
+  {
+    "path": "units/flamer",
+    "stem": "Flamer"
+  },
+  {
+    "path": "units/gorttherobot",
+    "stem": "GortTheRobot"
+  },
+  {
+    "path": "units/grapeshotcannon",
+    "stem": "GrapeShotCannon"
+  },
+  {
+    "path": "units/harry",
+    "stem": "Harry"
+  },
+  {
+    "path": "units/holdingpen",
+    "stem": "HoldingPen"
+  },
+  {
+    "path": "units/hut",
+    "stem": "Hut"
+  },
+  {
+    "path": "units/infantry",
+    "stem": "Infantry"
+  },
+  {
+    "path": "units/kingzog",
+    "stem": "KingZog"
+  },
+  {
+    "path": "units/lasertank",
+    "stem": "LaserTank"
+  },
+  {
+    "path": "units/machineshop",
+    "stem": "MachineShop"
+  },
+  {
+    "path": "units/mastodon",
+    "stem": "Mastodon"
+  },
+  {
+    "path": "units/mderrick",
+    "stem": "MDerrick"
+  },
+  {
+    "path": "units/mech",
+    "stem": "Mech"
+  },
+  {
+    "path": "units/mekanik",
+    "stem": "Mekanik"
+  },
+  {
+    "path": "units/menagerie",
+    "stem": "Menagerie"
+  },
+  {
+    "path": "units/mguardtower",
+    "stem": "MGuardTower"
+  },
+  {
+    "path": "units/missilebattery",
+    "stem": "MissileBattery"
+  },
+  {
+    "path": "units/monstertruck",
+    "stem": "MonsterTruck"
+  },
+  {
+    "path": "units/motanker",
+    "stem": "MOTanker"
+  },
+  {
+    "path": "units/mpowerstation",
+    "stem": "MPowerStation"
+  },
+  {
+    "path": "units/mrig",
+    "stem": "MRig"
+  },
+  {
+    "path": "units/outpost",
+    "stem": "Outpost"
+  },
+  {
+    "path": "units/outpostmobile",
+    "stem": "OutpostMobile"
+  },
+  {
+    "path": "units/pickup",
+    "stem": "Pickup"
+  },
+  {
+    "path": "units/pyromaniac",
+    "stem": "Pyromaniac"
+  },
+  {
+    "path": "units/repairbay",
+    "stem": "RepairBay"
+  },
+  {
+    "path": "units/researchlab",
+    "stem": "ResearchLab"
+  },
+  {
+    "path": "units/rioter",
+    "stem": "Rioter"
+  },
+  {
+    "path": "units/rocketinfantry",
+    "stem": "RocketInfantry"
+  },
+  {
+    "path": "units/rocketlauncher",
+    "stem": "RocketLauncher"
+  },
+  {
+    "path": "units/rotarycannon",
+    "stem": "RotaryCannon"
+  },
+  {
+    "path": "units/saboteur",
+    "stem": "Saboteur"
+  },
+  {
+    "path": "units/sapper",
+    "stem": "Sapper"
+  },
+  {
+    "path": "units/scorpion",
+    "stem": "Scorpion"
+  },
+  {
+    "path": "units/sderrick",
+    "stem": "SDerrick"
+  },
+  {
+    "path": "units/sentineldroid",
+    "stem": "SentinelDroid"
+  },
+  {
+    "path": "units/sguardtower",
+    "stem": "SGuardTower"
+  },
+  {
+    "path": "units/shotgunner",
+    "stem": "Shotgunner"
+  },
+  {
+    "path": "units/sidecar",
+    "stem": "Sidecar"
+  },
+  {
+    "path": "units/sniper",
+    "stem": "Sniper"
+  },
+  {
+    "path": "units/snot",
+    "stem": "Snot"
+  },
+  {
+    "path": "units/sotanker",
+    "stem": "SOTanker"
+  },
+  {
+    "path": "units/spowerstation",
+    "stem": "SPowerStation"
+  },
+  {
+    "path": "units/srig",
+    "stem": "SRig"
+  },
+  {
+    "path": "units/swat",
+    "stem": "SWAT"
+  },
+  {
+    "path": "units/tank",
+    "stem": "Tank"
+  },
+  {
+    "path": "units/technician",
+    "stem": "Technician"
+  },
+  {
+    "path": "units/vandal",
+    "stem": "Vandal"
+  },
+  {
+    "path": "units/wasp",
+    "stem": "Wasp"
+  },
+  {
+    "path": "units/wilburbomber",
+    "stem": "WilburBomber"
+  }
+]

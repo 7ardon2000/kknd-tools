@@ -1,0 +1,9 @@
+{
+  "name": "kknd-assets",
+  "private": true,
+  "scripts": {
+    "start": "cd viewer && npm run dev",
+    "viewer": "cd viewer && npm run dev",
+    "build:viewer": "cd viewer && npm run build"
+  }
+}

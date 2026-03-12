@@ -1,0 +1,16 @@
+# Dependencies
+openkrush/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Viewer
+viewer/dist/
+viewer/node_modules/
+
+# Editor
+.vscode/
+.idea/
