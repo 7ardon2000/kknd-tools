@@ -43,9 +43,30 @@
     }
     #ui button:hover { background: #4a8be5; }
     #ui button.secondary { background: #444; }
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+    .tab-bar button {
+      padding: 6px 14px;
+      background: #2a2a2a;
+      color: #e0e0e0;
+      border: 1px solid #444;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .tab-bar button:hover { background: #333; }
+    .tab-bar button.active {
+      background: #3a7bd5;
+      color: white;
+      border-color: #3a7bd5;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
     #canvas-wrapper {
       position: absolute;
-      top: 60px;
+      top: 90px;
       left: 0;
       right: 0;
       bottom: 0;
@@ -62,25 +83,44 @@
 </head>
 <body>
   <div id="ui">
-    <label>
-      Sprite:
-      <select id="sprite-select">
-        <option value="">-- Select sprite --</option>
-      </select>
-    </label>
-    <label>
-      Direction / Anim:
-      <select id="dir-select">
-        <option value="all">All frames</option>
-      </select>
-    </label>
-    <label>
-      <input type="range" id="speed" min="1" max="60" value="15" />
-      Speed
-    </label>
-    <button id="play-btn">Play</button>
-    <button id="step-btn" class="secondary">Step</button>
-    <span id="frame-info"></span>
+    <div class="tab-bar">
+      <button id="tab-sprite" class="active">Sprite Viewer</button>
+      <button id="tab-units">Units</button>
+      <button id="tab-effects">Effects</button>
+    </div>
+    <div id="sprite-viewer-ui" class="tab-content active">
+      <label>
+        Sprite:
+        <select id="sprite-select">
+          <option value="">-- Select sprite --</option>
+        </select>
+      </label>
+      <label>
+        Direction / Anim:
+        <select id="dir-select">
+          <option value="all">All frames</option>
+        </select>
+      </label>
+      <label>
+        <input type="range" id="speed" min="1" max="60" value="15" />
+        Speed
+      </label>
+      <button id="play-btn">Play</button>
+      <button id="step-btn" class="secondary">Step</button>
+      <span id="frame-info"></span>
+    </div>
+    <div id="units-ui" class="tab-content">
+      <label>
+        Unit:
+        <select id="unit-select">
+          <option value="">-- Select unit --</option>
+        </select>
+      </label>
+      <span id="units-status">Units — 25 animations at 8 FPS (shared frame layout)</span>
+    </div>
+    <div id="effects-ui" class="tab-content">
+      <span id="effects-status">Effects — 59 animations at 8 FPS (Extras)</span>
+    </div>
   </div>
   <div id="canvas-wrapper"></div>
   <script type="module" src="/src/main.js"></script>

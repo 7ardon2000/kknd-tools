@@ -134,7 +134,13 @@ npm run dev
 
 Open http://localhost:5173
 
-### Viewer controls
+### Viewer tabs
+
+- **Sprite Viewer** – Load any sprite, filter by direction/animation, and play at configurable speed.
+- **Units** – Select an infantry-type unit from a dropdown to view its 25 animations in a 5×5 grid at 8 FPS. All units share the same frame layout (stand, move, attack in 8 directions plus stand south2) for comparison. For SWAT, shoot effects (shootNorth1, shootEast1, etc.) from Extras are overlaid in front of the rifle barrel during attack animations. Available units: ElPresidente, Flamer, Harry, Infantry, KingZog, Mech, Mekanik, Pyromaniac, Rioter, RocketInfantry, RocketLauncher, Saboteur, Sapper, Sniper, Swat, Technician, Vandal.
+- **Effects** – Displays 59 effect animations from Extras (effects/extras) in a grid at 8 FPS: shrapnel, dust, fire, explosions, acid, electricity, craters, laser, death, and shoot effects. Definitions in `viewer/src/effects-config.js`.
+
+### Viewer controls (Sprite Viewer tab)
 
 | Control | Purpose |
 |--------|---------|
@@ -144,7 +150,7 @@ Open http://localhost:5173
 | **Play** | Start or pause animation. |
 | **Step** | Advance one frame. |
 
-The viewer applies `ox` and `oy` for each frame so sprites are positioned correctly.
+The viewer applies `ox` and `oy` for each frame so sprites are positioned correctly. Units tab animation definitions and unit list are in `viewer/src/unit-config.js`. Effects tab uses `viewer/src/effects-config.js`.
 
 ### Regenerate sprite list
 
@@ -184,7 +190,9 @@ kknd-assets/
 │   ├── package.json
 │   ├── src/
 │   │   ├── main.js
-│   │   └── sprites.json   # Generated sprite manifest
+│   │   ├── sprites.json   # Generated sprite manifest
+│   │   ├── unit-config.js     # Units tab: animation definitions + unit list
+│   │   └── effects-config.js  # Effects tab: Extras effect animations
 │   └── index.html
 ├── extract-assets.ps1
 ├── extract_mobd.py
@@ -246,6 +254,13 @@ After extraction, game content is copied to:
 
 ## Changelog
 
+- **2026-03-13**: Effects tab
+  - New tab displaying 59 Extras effect animations (shrapnel, dust, fire, explosions, acid, electricity, craters, laser, death, shoot) in a grid at 8 FPS
+  - `viewer/src/effects-config.js` defines `EFFECTS_ANIMATIONS`
+- **2026-03-13**: Units tab
+  - Renamed SWAT Grid → Units; dropdown to select infantry-type unit (ElPresidente, Flamer, Harry, Infantry, KingZog, Mech, Mekanik, Pyromaniac, Rioter, RocketInfantry, RocketLauncher, Saboteur, Sapper, Sniper, Swat, Technician, Vandal)
+  - All units use shared frame layout (25 animations) for comparison at 8 FPS
+  - `viewer/src/unit-config.js` defines `UNIT_ANIMATIONS` and `UNITS`
 - **2026-03-12**: Phaser Animation Viewer
   - viewer/ with Phaser 3 + Vite
   - Sprite manifest (`scripts/generate-viewer-manifest.py`)

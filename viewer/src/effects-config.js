@@ -1,0 +1,73 @@
+/**
+ * Effects animations from effects/extras (Extras). Frame indices are 0-based.
+ */
+
+const range = (start, end) =>
+  Array.from({ length: end - start + 1 }, (_, i) => start + i);
+
+/** Effect animation definitions. All from Extras (effects/extras). */
+export const EFFECTS_ANIMATIONS = [
+  { name: 'shrapnel1', frames: range(267, 270) },
+  { name: 'shrapnel2', frames: range(271, 274) },
+  { name: 'dust1', frames: range(261, 266) },
+  { name: 'dust2', frames: range(275, 280) },
+  { name: 'fire1', frames: range(292, 308) },
+  { name: 'explosionLarge1', frames: range(192, 207) },
+  { name: 'explosionMedium1', frames: range(208, 223) },
+  { name: 'explosionSmall1', frames: range(224, 236) },
+  { name: 'explosionSmall2', frames: range(237, 248) },
+  { name: 'explosionSmall3', frames: range(249, 260) },
+  { name: 'acid1', frames: range(338, 344) },
+  { name: 'electricity1', frames: range(344, 352) },
+  { name: 'electricity2', frames: range(353, 361) },
+  { name: 'crater1', frames: [362] },
+  { name: 'crater2', frames: [363] },
+  { name: 'crater3', frames: [364] },
+  { name: 'crater4', frames: [365] },
+  { name: 'crater5', frames: [366] },
+  { name: 'crater6', frames: [367] },
+  { name: 'crater7', frames: [368] },
+  { name: 'crater8', frames: [369] },
+  { name: 'crater9', frames: [370] },
+  { name: 'laserExplosion1', frames: range(371, 375) },
+  { name: 'humanDie1', frames: range(309, 313) },
+  { name: 'mutantDie1', frames: range(324, 329) },
+  { name: 'shootNorthEast1', frames: [1, 2] },
+  { name: 'shootNorthEast2', frames: [3, 4] },
+  { name: 'shootNorthEast3', frames: [5, 6] },
+  { name: 'shootNorthEast4', frames: [35, 36] },
+  { name: 'shootEast1', frames: [7, 8] },
+  { name: 'shootEast2', frames: [9, 10] },
+  { name: 'shootEast3', frames: [11, 12] },
+  { name: 'shootEast4', frames: [37, 38] },
+  { name: 'shootEast5', frames: [39, 40] },
+  { name: 'shootEast6', frames: [41, 42] },
+  { name: 'shootSouthEast1', frames: [13, 14] },
+  { name: 'shootSouthEast2', frames: [43, 44] },
+  { name: 'shootSouth1', frames: [15, 16] },
+  { name: 'shootSouth2', frames: [46, 47] },
+  { name: 'shootSouth3', frames: [48, 49] },
+  { name: 'shootSouth4', frames: [50, 51] },
+  { name: 'shootSouthWest1', frames: [17, 18] },
+  { name: 'shootSouthWest2', frames: [19, 20] },
+  { name: 'shootSouthWest3', frames: [21, 22] },
+  { name: 'shootSouthWest4', frames: [52, 53] },
+  { name: 'shootWest1', frames: [23, 24] },
+  { name: 'shootWest2', frames: [54, 55] },
+  { name: 'shootWest3', frames: [56, 57] },
+  { name: 'shootWest4', frames: [58, 59] },
+  { name: 'shootNorthWest1', frames: [25, 26] },
+  { name: 'shootNorthWest2', frames: [27, 28] },
+  { name: 'shootNorthWest3', frames: [29, 30] },
+  { name: 'shootNorthWest4', frames: [60, 61] },
+  { name: 'shootNorth1', frames: [31, 32] },
+  { name: 'shootNorth2', frames: [33, 34] },
+  { name: 'shootNorth3', frames: [35, 36] },
+  { name: 'shootNorth4', frames: [62, 63] },
+  { name: 'shootNorth5', frames: [64, 65] },
+  { name: 'shootNorth6', frames: [66, 67] },
+  { name: 'shootNorth7', frames: [68, 69] },
+];
+
+/** Effects sprite path (Extras from effects folder). */
+export const EFFECTS_SPRITE = { path: 'effects/extras', stem: 'Extras' };
