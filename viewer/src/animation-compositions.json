@@ -1,0 +1,204 @@
+{
+  "compositions": [
+    {
+      "id": "SWAT/attack north",
+      "layers": [
+        {
+          "source": "units/swat",
+          "stem": "SWAT",
+          "anim": "attack north",
+          "layer": 0,
+          "offsetX": 0,
+          "offsetY": 3,
+          "scale": 0.5,
+          "fps": 8
+        },
+        {
+          "source": "effects/extras",
+          "stem": "Extras",
+          "anim": "shootNorth1",
+          "layer": 1,
+          "offsetX": 1,
+          "offsetY": -8,
+          "scale": 0.3,
+          "fps": 4
+        }
+      ]
+    },
+    {
+      "id": "SWAT/attack northeast",
+      "layers": [
+        {
+          "source": "units/swat",
+          "stem": "SWAT",
+          "anim": "attack northeast",
+          "layer": 0,
+          "offsetX": 0,
+          "offsetY": 3,
+          "scale": 0.5,
+          "fps": 8
+        },
+        {
+          "source": "effects/extras",
+          "stem": "Extras",
+          "anim": "shootNorthEast1",
+          "layer": 1,
+          "offsetX": 5,
+          "offsetY": -8,
+          "scale": 0.3,
+          "fps": 4
+        }
+      ]
+    },
+    {
+      "id": "SWAT/attack east",
+      "layers": [
+        {
+          "source": "units/swat",
+          "stem": "SWAT",
+          "anim": "attack east",
+          "layer": 0,
+          "offsetX": 0,
+          "offsetY": 3,
+          "scale": 0.5,
+          "fps": 8
+        },
+        {
+          "source": "effects/extras",
+          "stem": "Extras",
+          "anim": "shootEast1",
+          "layer": 1,
+          "offsetX": 8,
+          "offsetY": -3,
+          "scale": 0.3,
+          "fps": 4
+        }
+      ]
+    },
+    {
+      "id": "SWAT/attack southeast",
+      "layers": [
+        {
+          "source": "units/swat",
+          "stem": "SWAT",
+          "anim": "attack southeast",
+          "layer": 0,
+          "offsetX": 0,
+          "offsetY": 3,
+          "scale": 0.5,
+          "fps": 8
+        },
+        {
+          "source": "effects/extras",
+          "stem": "Extras",
+          "anim": "shootSouthEast1",
+          "layer": 1,
+          "offsetX": 5,
+          "offsetY": 1,
+          "scale": 0.3,
+          "fps": 4
+        }
+      ]
+    },
+    {
+      "id": "SWAT/attack south",
+      "layers": [
+        {
+          "source": "units/swat",
+          "stem": "SWAT",
+          "anim": "attack south",
+          "layer": 0,
+          "offsetX": 0,
+          "offsetY": 3,
+          "scale": 0.5,
+          "fps": 8
+        },
+        {
+          "source": "effects/extras",
+          "stem": "Extras",
+          "anim": "shootSouth1",
+          "layer": 1,
+          "offsetX": 1,
+          "offsetY": 5,
+          "scale": 0.3,
+          "fps": 4
+        }
+      ]
+    },
+    {
+      "id": "SWAT/attack southwest",
+      "layers": [
+        {
+          "source": "units/swat",
+          "stem": "SWAT",
+          "anim": "attack southwest",
+          "layer": 0,
+          "offsetX": 0,
+          "offsetY": 3,
+          "scale": 0.5,
+          "fps": 8
+        },
+        {
+          "source": "effects/extras",
+          "stem": "Extras",
+          "anim": "shootSouthWest1",
+          "layer": 1,
+          "offsetX": -5,
+          "offsetY": 1,
+          "scale": 0.3,
+          "fps": 4
+        }
+      ]
+    },
+    {
+      "id": "SWAT/attack west",
+      "layers": [
+        {
+          "source": "units/swat",
+          "stem": "SWAT",
+          "anim": "attack west",
+          "layer": 0,
+          "offsetX": 0,
+          "offsetY": 3,
+          "scale": 0.5,
+          "fps": 8
+        },
+        {
+          "source": "effects/extras",
+          "stem": "Extras",
+          "anim": "shootWest1",
+          "layer": 1,
+          "offsetX": -8,
+          "offsetY": -3,
+          "scale": 0.3,
+          "fps": 4
+        }
+      ]
+    },
+    {
+      "id": "SWAT/attack northwest",
+      "layers": [
+        {
+          "source": "units/swat",
+          "stem": "SWAT",
+          "anim": "attack northwest",
+          "layer": 0,
+          "offsetX": 0,
+          "offsetY": 3,
+          "scale": 0.5,
+          "fps": 8
+        },
+        {
+          "source": "effects/extras",
+          "stem": "Extras",
+          "anim": "shootNorthWest1",
+          "layer": 1,
+          "offsetX": -5,
+          "offsetY": -8,
+          "scale": 0.3,
+          "fps": 4
+        }
+      ]
+    }
+  ]
+}

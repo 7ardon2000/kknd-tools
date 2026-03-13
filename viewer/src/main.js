@@ -2,13 +2,14 @@ import Phaser from 'phaser';
 import manifest from './sprites.json';
 import { UNIT_ANIMATIONS, UNITS, ATTACK_TO_SHOOT_EFFECT, SHOOT_EFFECT_SCALE } from './unit-config.js';
 import { EFFECTS_ANIMATIONS, EFFECTS_SPRITE } from './effects-config.js';
+import { getAllAnimations, SWAT_ATTACK_COMPOSITIONS } from './configure-config.js';
 
 class ViewerScene extends Phaser.Scene {
   constructor() {
     super({ key: 'Viewer' });
   }
 
-  create() {
+  async create() {
     this.sprite = null;
     this.meta = null;
     this.filteredFrames = [];
@@ -28,10 +29,54 @@ class ViewerScene extends Phaser.Scene {
     this.effectsGridLoadInProgress = false;
     this.effectsGridLoaded = false;
 
+    this.animationCompositions = { compositions: [] };
+    this.configureSlots = [null, null, null]; // { animEntry, layer, offsetX, offsetY } per slot
+    this.configureEditingId = null; // composition id when editing existing (e.g. SWAT/attack north)
+    this.configureGridSprites = [];
+    this.configureGridGraphics = null;
+    this.configureGridContainer = null;
+    this.configureZoom = 1;
+    this.configureMoveSlot = 1; // which slot (1-3) is selected for move/arrow keys
+    this.configureDragState = null; // { slotIndex, sprite } when dragging
+    this.configureGridMeta = {}; // stem -> meta for each loaded sprite
+    this.configurePlaying = false;
+    this.configureLastAdvance = 0;
+    this.configureLoadInProgress = false;
+
+    await this.loadCompositions();
     this.setupUI();
     this.loadManifest();
     this.setupTabs();
     this.setupUnitsTab();
+    this.setupConfigureTab();
+  }
+
+  async loadCompositions() {
+    try {
+      const stored = localStorage.getItem('kknd-animation-compositions');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed?.compositions) {
+            this.animationCompositions = parsed;
+            return;
+          }
+        } catch {}
+      }
+      const res = await fetch('/src/animation-compositions.json');
+      if (res.ok) {
+        const storedNow = localStorage.getItem('kknd-animation-compositions');
+        if (storedNow) {
+          try {
+            this.animationCompositions = JSON.parse(storedNow);
+            return;
+          } catch {}
+        }
+        this.animationCompositions = await res.json();
+      }
+    } catch {
+      // Keep default { compositions: [] }
+    }
   }
 
   loadManifest() {
@@ -56,13 +101,16 @@ class ViewerScene extends Phaser.Scene {
     const tabSprite = document.getElementById('tab-sprite');
     const tabUnits = document.getElementById('tab-units');
     const tabEffects = document.getElementById('tab-effects');
+    const tabConfigure = document.getElementById('tab-configure');
     const spriteUI = document.getElementById('sprite-viewer-ui');
     const unitsUI = document.getElementById('units-ui');
     const effectsUI = document.getElementById('effects-ui');
+    const configureUI = document.getElementById('configure-ui');
 
     tabSprite.addEventListener('click', () => this.switchTab('sprite'));
     tabUnits.addEventListener('click', () => this.switchTab('units'));
     tabEffects.addEventListener('click', () => this.switchTab('effects'));
+    tabConfigure.addEventListener('click', () => this.switchTab('configure'));
   }
 
   setupUnitsTab() {
@@ -77,33 +125,607 @@ class ViewerScene extends Phaser.Scene {
     sel.addEventListener('change', () => this.onUnitSelect());
   }
 
+  setupConfigureTab() {
+    const allAnims = getAllAnimations();
+    const compSel = document.getElementById('configure-composition-select');
+    if (compSel) {
+      this.buildConfigureCompositionSelector();
+      compSel.addEventListener('change', () => this.onConfigureCompositionSelect());
+    }
+    for (let i = 1; i <= 3; i++) {
+      const sel = document.getElementById(`configure-slot-${i}`);
+      sel.innerHTML = '<option value="">-- None --</option>';
+      for (const a of allAnims) {
+        const opt = document.createElement('option');
+        opt.value = JSON.stringify(a);
+        opt.textContent = a.displayName;
+        sel.appendChild(opt);
+      }
+      sel.addEventListener('change', () => this.onConfigureSlotChange(i));
+      document.getElementById(`configure-layer-${i}`).addEventListener('change', () => this.onConfigureSlotChange(i));
+      const scaleIn = document.getElementById(`configure-scale-${i}`);
+      const fpsIn = document.getElementById(`configure-fps-${i}`);
+      if (scaleIn) {
+        scaleIn.addEventListener('input', () => this.onConfigureScaleChange(i));
+      }
+      if (fpsIn) {
+        fpsIn.addEventListener('change', () => this.onConfigureSlotChange(i));
+      }
+    }
+    document.getElementById('configure-play-btn').addEventListener('click', () => this.toggleConfigurePlay());
+    document.getElementById('configure-step-btn').addEventListener('click', () => this.stepConfigureFrame());
+    document.getElementById('configure-save-btn').addEventListener('click', () => this.saveConfigureComposition());
+
+    const canvas = this.game.canvas;
+    canvas.addEventListener('wheel', (e) => {
+      if (this.activeTab !== 'configure') return;
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.15 : 0.15;
+      this.configureZoom = Math.max(0.5, Math.min(3, this.configureZoom + delta));
+      if (this.configureGridContainer) {
+        this.configureGridContainer.setScale(this.configureZoom);
+      }
+      const statusEl = document.getElementById('configure-status');
+      if (statusEl) statusEl.textContent = `Zoom ${Math.round(this.configureZoom * 100)}% — drag sprites, then Save`;
+    }, { passive: false });
+
+    const moveSlotEl = document.getElementById('configure-move-slot');
+    if (moveSlotEl) {
+      moveSlotEl.addEventListener('change', () => {
+        this.configureMoveSlot = Math.max(1, Math.min(3, parseInt(moveSlotEl.value, 10) || 1));
+        this.updateConfigureMoveSlotDropdown();
+      });
+    }
+
+    this.input.on('pointermove', (pointer) => {
+      if (this.activeTab !== 'configure' || !this.configureDragState) return;
+      const { slotIndex, sprite } = this.configureDragState;
+      const centerX = 400;
+      const centerY = 300;
+      if (pointer.isDown) {
+        const localX = (pointer.worldX - centerX) / this.configureZoom;
+        const localY = (pointer.worldY - centerY) / this.configureZoom;
+        sprite.setPosition(localX, localY);
+        if (this.configureSlots[slotIndex - 1]) {
+          this.configureSlots[slotIndex - 1].offsetX = Math.round(localX);
+          this.configureSlots[slotIndex - 1].offsetY = Math.round(localY);
+        }
+      }
+    });
+
+    this.input.on('pointerup', () => {
+      if (this.configureDragState) {
+        const { slotIndex, sprite } = this.configureDragState;
+        if (this.configureSlots[slotIndex - 1]) {
+          this.configureSlots[slotIndex - 1].offsetX = Math.round(sprite.x);
+          this.configureSlots[slotIndex - 1].offsetY = Math.round(sprite.y);
+        }
+        this.configureDragState = null;
+        const statusEl = document.getElementById('configure-status');
+        if (statusEl) statusEl.textContent = 'Drag or use arrow keys to move selected layer, then Save';
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (this.activeTab !== 'configure') return;
+      const slot = this.configureSlots[this.configureMoveSlot - 1];
+      if (!slot) return;
+      const step = e.shiftKey ? 5 : 1;
+      let dx = 0;
+      let dy = 0;
+      if (e.key === 'ArrowLeft') dx = -step;
+      else if (e.key === 'ArrowRight') dx = step;
+      else if (e.key === 'ArrowUp') dy = -step;
+      else if (e.key === 'ArrowDown') dy = step;
+      else return;
+      e.preventDefault();
+      slot.offsetX += dx;
+      slot.offsetY += dy;
+      const cell = this.configureGridSprites.find((c) => c.slot.slotIndex === this.configureMoveSlot);
+      if (cell) {
+        cell.sprite.setPosition(slot.offsetX, slot.offsetY);
+      }
+      const statusEl = document.getElementById('configure-status');
+      if (statusEl) statusEl.textContent = `Slot ${this.configureMoveSlot}: (${slot.offsetX}, ${slot.offsetY}) — arrow keys or drag`;
+    });
+  }
+
+  buildConfigureCompositionSelector() {
+    const compSel = document.getElementById('configure-composition-select');
+    if (!compSel) return;
+    const currentVal = compSel.value;
+    compSel.innerHTML = '<option value="">-- Select animation --</option>';
+    for (const c of SWAT_ATTACK_COMPOSITIONS) {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = c.label;
+      compSel.appendChild(opt);
+    }
+    const existing = this.animationCompositions?.compositions ?? [];
+    const swatIds = new Set(SWAT_ATTACK_COMPOSITIONS.map((c) => c.id));
+    for (const comp of existing) {
+      if (!swatIds.has(comp.id)) {
+        const opt = document.createElement('option');
+        opt.value = comp.id;
+        opt.textContent = comp.id;
+        compSel.appendChild(opt);
+      }
+    }
+    const optNew = document.createElement('option');
+    optNew.value = '__new__';
+    optNew.textContent = 'New composition…';
+    compSel.appendChild(optNew);
+    if (currentVal) compSel.value = currentVal;
+  }
+
+  onConfigureCompositionSelect() {
+    const compSel = document.getElementById('configure-composition-select');
+    const val = compSel?.value;
+    const allAnims = getAllAnimations();
+    this.configureEditingId = val === '__new__' ? null : (val || null);
+
+    document.getElementById('configure-id-label').style.display = val && val !== '__new__' ? 'inline' : 'none';
+    document.getElementById('configure-id-input-label').style.display = val === '__new__' ? 'inline' : 'none';
+    if (val && val !== '__new__') {
+      document.getElementById('configure-id-display').textContent = val;
+    }
+
+    this.configureSlots = [null, null, null];
+    if (!val || val === '__new__') {
+      this.buildConfigureSlotsUI();
+      this.loadConfigureTextures();
+      return;
+    }
+
+    const comp = this.animationCompositions?.compositions?.find((c) => c.id === val);
+    const swatDef = SWAT_ATTACK_COMPOSITIONS.find((c) => c.id === val);
+
+    if (swatDef) {
+      const animName = swatDef.id.replace('SWAT/', '');
+      const unitEntry = allAnims.find((a) => a.stem === 'SWAT' && a.anim?.name === animName);
+      const effectEntry = allAnims.find((a) => a.stem === 'Extras' && a.anim?.name === swatDef.shootAnim);
+      if (!unitEntry || !effectEntry) return;
+      const unitLayer = comp?.layers?.find((l) => l.stem === 'SWAT');
+      const effectLayer = comp?.layers?.find((l) => l.stem === 'Extras');
+      this.configureSlots = [
+        {
+          animEntry: unitEntry,
+          layer: unitLayer?.layer ?? 0,
+          offsetX: unitLayer?.offsetX ?? 0,
+          offsetY: unitLayer?.offsetY ?? 3,
+          scale: unitLayer?.scale ?? 0.5,
+          fps: unitLayer?.fps ?? 8,
+        },
+        {
+          animEntry: effectEntry,
+          layer: effectLayer?.layer ?? 1,
+          offsetX: effectLayer?.offsetX ?? (ATTACK_TO_SHOOT_EFFECT[animName]?.offsetX ?? 0),
+          offsetY: effectLayer?.offsetY ?? (ATTACK_TO_SHOOT_EFFECT[animName]?.offsetY ?? 0),
+          scale: effectLayer?.scale ?? 0.3,
+          fps: effectLayer?.fps ?? 4,
+        },
+        null,
+      ];
+    } else if (comp?.layers?.length) {
+      const slots = [];
+      for (let i = 0; i < Math.min(3, comp.layers.length); i++) {
+        const layer = comp.layers[i];
+        const entry = allAnims.find((a) => a.path === layer.source && a.stem === layer.stem && a.anim?.name === layer.anim);
+        if (entry) {
+          slots.push({
+            animEntry: entry,
+            layer: layer.layer ?? i,
+            offsetX: layer.offsetX ?? 0,
+            offsetY: layer.offsetY ?? 0,
+            scale: layer.scale ?? (layer.stem === 'Extras' ? 0.2 : 0.5),
+            fps: layer.fps ?? 8,
+          });
+        }
+      }
+      while (slots.length < 3) slots.push(null);
+      this.configureSlots = slots.slice(0, 3);
+    }
+    this.buildConfigureSlotsUI();
+    this.loadConfigureTextures();
+  }
+
+  buildConfigureSlotsUI() {
+    for (let i = 1; i <= 3; i++) {
+      const slot = this.configureSlots[i - 1];
+      const layerSel = document.getElementById(`configure-layer-${i}`);
+      const scaleIn = document.getElementById(`configure-scale-${i}`);
+      const scaleVal = document.getElementById(`configure-scale-val-${i}`);
+      const fpsIn = document.getElementById(`configure-fps-${i}`);
+      const slotSel = document.getElementById(`configure-slot-${i}`);
+      if (!slotSel) continue;
+      if (slot) {
+        const match = Array.from(slotSel.options).find((o) => {
+          try {
+            const j = JSON.parse(o.value);
+            return j?.stem === slot.animEntry?.stem && j?.anim?.name === slot.animEntry?.anim?.name;
+          } catch {
+            return false;
+          }
+        });
+        if (match) slotSel.value = match.value;
+        if (layerSel) layerSel.value = String(slot.layer);
+        if (scaleIn) {
+          scaleIn.value = String(slot.scale ?? 0.5);
+          if (scaleVal) scaleVal.textContent = String(slot.scale ?? 0.5);
+        }
+        if (fpsIn) fpsIn.value = String(slot.fps ?? 8);
+      } else {
+        slotSel.value = '';
+        if (layerSel) layerSel.value = i === 1 ? '0' : i === 2 ? '1' : '2';
+        if (scaleIn) {
+          scaleIn.value = i === 1 ? '0.5' : '0.3';
+          if (scaleVal) scaleVal.textContent = i === 1 ? '0.5' : '0.3';
+        }
+        if (fpsIn) fpsIn.value = '8';
+      }
+    }
+    this.updateConfigureMoveSlotDropdown();
+  }
+
+  updateConfigureMoveSlotDropdown() {
+    const sel = document.getElementById('configure-move-slot');
+    if (!sel) return;
+    const filled = [];
+    for (let i = 1; i <= 3; i++) {
+      const slot = this.configureSlots[i - 1];
+      if (slot) {
+        const name = slot.animEntry?.displayName || `Slot ${i}`;
+        filled.push({ value: String(i), label: `Slot ${i}: ${name}` });
+      }
+    }
+    sel.innerHTML = '';
+    for (const { value, label } of filled) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = label.length > 40 ? label.slice(0, 37) + '…' : label;
+      sel.appendChild(opt);
+    }
+    if (filled.length > 0 && !filled.find((f) => f.value === String(this.configureMoveSlot))) {
+      this.configureMoveSlot = parseInt(filled[0].value, 10);
+    }
+    if (filled.length > 0) sel.value = String(this.configureMoveSlot);
+  }
+
+  onConfigureSlotChange(slotIndex) {
+    const sel = document.getElementById(`configure-slot-${slotIndex}`);
+    const layerSel = document.getElementById(`configure-layer-${slotIndex}`);
+    const scaleIn = document.getElementById(`configure-scale-${slotIndex}`);
+    const fpsIn = document.getElementById(`configure-fps-${slotIndex}`);
+    const val = sel.value;
+    if (!val) {
+      this.configureSlots[slotIndex - 1] = null;
+    } else {
+      const animEntry = JSON.parse(val);
+      const layer = parseInt(layerSel.value, 10);
+      const existing = this.configureSlots[slotIndex - 1];
+      const scale = scaleIn ? parseFloat(scaleIn.value) || 0.5 : (existing?.animEntry?.stem === 'Extras' ? 0.2 : 0.5);
+      const fps = fpsIn ? Math.max(1, Math.min(60, parseInt(fpsIn.value, 10) || 8)) : (existing?.fps ?? 8);
+      this.configureSlots[slotIndex - 1] = {
+        animEntry,
+        layer,
+        offsetX: existing?.offsetX ?? 0,
+        offsetY: existing?.offsetY ?? 0,
+        scale,
+        fps,
+        frameIndex: 0,
+      };
+    }
+    this.loadConfigureTextures();
+  }
+
+  onConfigureScaleChange(slotIndex) {
+    const scaleIn = document.getElementById(`configure-scale-${slotIndex}`);
+    const valSpan = document.getElementById(`configure-scale-val-${slotIndex}`);
+    const v = parseFloat(scaleIn?.value) || 0.5;
+    if (valSpan) valSpan.textContent = String(v);
+    const slot = this.configureSlots[slotIndex - 1];
+    if (slot) slot.scale = v;
+    const cell = this.configureGridSprites.find((c) => c.slot.slotIndex === slotIndex);
+    if (cell) cell.sprite.setScale(v);
+  }
+
+  async loadConfigureTextures() {
+    const slots = this.configureSlots.filter(Boolean);
+    if (slots.length === 0) {
+      this.destroyConfigureGrid();
+      document.getElementById('configure-status').textContent = 'Configure — select animations, drag to position, save';
+      return;
+    }
+    if (this.configureLoadInProgress) return;
+
+    const toLoad = new Map(); // path -> { path, stem, meta }
+    for (const slot of slots) {
+      const { path, stem } = slot.animEntry;
+      const key = `${path}:${stem}`;
+      if (!toLoad.has(key)) toLoad.set(key, { path, stem });
+    }
+
+    for (const { path, stem } of toLoad.values()) {
+      if (this.configureGridMeta[stem]) continue;
+      try {
+        const res = await fetch(`/${path}/${stem}_frames.json`);
+        if (res.ok) this.configureGridMeta[stem] = await res.json();
+      } catch {
+        // ignore
+      }
+    }
+
+    this.configureLoadInProgress = true;
+    document.getElementById('configure-status').textContent = 'Loading...';
+
+    const keyPrefixes = new Set();
+    for (const slot of slots) {
+      const { path, stem } = slot.animEntry;
+      keyPrefixes.add(`${path}:${stem}`);
+    }
+
+    for (const key of keyPrefixes) {
+      const [path, stem] = key.split(':');
+      const meta = this.configureGridMeta[stem];
+      if (!meta) continue;
+      const totalFrames = meta.total_frames || meta.frames?.length || 0;
+      const loadKeyPrefix = `f-${stem}-`;
+      for (let i = 0; i < totalFrames; i++) {
+        const pad = String(i).padStart(4, '0');
+        this.load.image(`${loadKeyPrefix}${i}`, `/${path}/${stem}_${pad}.png`);
+      }
+    }
+
+    this.load.once('complete', () => {
+      this.configureLoadInProgress = false;
+      this.buildConfigureGrid();
+      document.getElementById('configure-status').textContent = 'Drag sprites to position, then Save';
+    });
+    this.load.once('loaderror', () => {
+      this.configureLoadInProgress = false;
+      document.getElementById('configure-status').textContent = 'Load error';
+    });
+    this.load.start();
+  }
+
+  buildConfigureGrid() {
+    this.destroyConfigureGrid();
+    const centerX = 400;
+    const centerY = 300;
+    const gridSize = 400;
+    const half = gridSize / 2;
+
+    // Container for zoom: center at (400,300), origin at center, content in local coords
+    this.configureGridContainer = this.add.container(centerX, centerY);
+    this.configureGridContainer.setScale(this.configureZoom);
+    this.configureGridContainer.setDepth(0);
+
+    // Grid graphics in local coords (-200 to 200)
+    this.configureGridGraphics = this.add.graphics();
+    this.configureGridGraphics.lineStyle(1, 0x333333);
+    for (let i = 0; i <= 10; i++) {
+      const off = -half + (gridSize / 10) * i;
+      this.configureGridGraphics.lineBetween(-half, off, half, off);
+      this.configureGridGraphics.lineBetween(off, -half, off, half);
+    }
+    this.configureGridGraphics.lineStyle(2, 0x555555);
+    this.configureGridGraphics.lineBetween(-10, 0, 10, 0);
+    this.configureGridGraphics.lineBetween(0, -10, 0, 10);
+    this.configureGridContainer.add(this.configureGridGraphics);
+
+    const slots = this.configureSlots
+      .map((s, i) => (s ? { ...s, slotIndex: i + 1 } : null))
+      .filter(Boolean)
+      .sort((a, b) => a.layer - b.layer);
+
+    for (const slot of slots) {
+      const { animEntry, layer, offsetX, offsetY, slotIndex } = slot;
+      const { path, stem, anim } = animEntry;
+      const frameI = anim.frames[0];
+      const key = `f-${stem}-${frameI}`;
+      if (!this.textures.exists(key)) continue;
+
+      const scale = slot.scale ?? (stem === 'Extras' ? 0.2 : 0.5);
+
+      const sprite = this.add.sprite(offsetX, offsetY, key);
+      sprite.setScale(scale);
+      sprite.setDepth(10 + layer);
+      if (anim.flipX) sprite.setFlipX(true);
+
+      const meta = this.configureGridMeta[stem];
+      const frameData = meta?.frames?.find((f) => f.i === frameI);
+      if (frameData) {
+        const tex = sprite.texture;
+        const w = tex.getSourceImage().width || 1;
+        const h = tex.getSourceImage().height || 1;
+        sprite.setOrigin(
+          Math.max(0, Math.min(1, frameData.ox / w)),
+          Math.max(0, Math.min(1, frameData.oy / h))
+        );
+      }
+
+      sprite.setInteractive({ useHandCursor: true });
+      sprite.setData('slotIndex', slotIndex);
+      sprite.on('pointerdown', () => {
+        this.configureDragState = { slotIndex, sprite };
+        const statusEl = document.getElementById('configure-status');
+        if (statusEl) statusEl.textContent = `Dragging Slot ${slotIndex} — release to drop`;
+      });
+
+      this.configureGridContainer.add(sprite);
+      this.configureGridSprites.push({
+        sprite,
+        slot,
+        frameIndex: 0,
+        lastAdvance: 0,
+      });
+    }
+    this.updateConfigureMoveSlotDropdown();
+  }
+
+  destroyConfigureGrid() {
+    if (this.configureGridContainer) {
+      this.configureGridContainer.destroy();
+      this.configureGridContainer = null;
+    }
+    this.configureGridGraphics = null;
+    this.configureGridSprites = [];
+  }
+
+  hideConfigureGrid() {
+    this.destroyConfigureGrid();
+  }
+
+  buildConfigureSlotsDropdowns() {
+    this.buildConfigureSlotsUI();
+  }
+
+  scheduleConfigureLoad() {
+    this.loadConfigureTextures();
+  }
+
+  applyConfigureGridFrame(cell) {
+    const { sprite, slot } = cell;
+    const { animEntry, slotIndex } = slot;
+    const { stem, anim } = animEntry;
+    const frameI = anim.frames[cell.frameIndex % anim.frames.length];
+    const key = `f-${stem}-${frameI}`;
+    if (!this.textures.exists(key)) return;
+
+    sprite.setTexture(key);
+    sprite.setFlipX(anim.flipX ?? false);
+
+    const meta = this.configureGridMeta[stem];
+    const frameData = meta?.frames?.find((f) => f.i === frameI);
+    if (frameData) {
+      const tex = sprite.texture;
+      const w = tex.getSourceImage().width || 1;
+      const h = tex.getSourceImage().height || 1;
+      sprite.setOrigin(
+        Math.max(0, Math.min(1, frameData.ox / w)),
+        Math.max(0, Math.min(1, frameData.oy / h))
+      );
+    }
+  }
+
+  toggleConfigurePlay() {
+    this.configurePlaying = !this.configurePlaying;
+    document.getElementById('configure-play-btn').textContent = this.configurePlaying ? 'Pause' : 'Play';
+  }
+
+  stepConfigureFrame() {
+    this.configurePlaying = false;
+    document.getElementById('configure-play-btn').textContent = 'Play';
+    for (const cell of this.configureGridSprites) {
+      const slot = this.configureSlots[cell.slot.slotIndex - 1];
+      if (slot && slot.animEntry?.anim?.frames?.length) {
+        cell.frameIndex = (cell.frameIndex + 1) % slot.animEntry.anim.frames.length;
+        this.applyConfigureGridFrame(cell);
+      }
+    }
+  }
+
+  async saveConfigureComposition() {
+    const slots = this.configureSlots.filter(Boolean);
+    if (slots.length === 0) {
+      document.getElementById('configure-status').textContent = 'Add at least one animation to save';
+      return;
+    }
+    let compId = this.configureEditingId;
+    if (!compId) {
+      const idInput = document.getElementById('composition-id');
+      compId = idInput?.value?.trim();
+    }
+    if (!compId && slots[0]) compId = slots[0].animEntry.id;
+    if (!compId) {
+      document.getElementById('configure-status').textContent = 'Enter a composition ID (e.g. SWAT/attack north)';
+      return;
+    }
+
+    const layers = slots
+      .sort((a, b) => a.layer - b.layer)
+      .map((s) => ({
+        source: s.animEntry.path,
+        stem: s.animEntry.stem,
+        anim: s.animEntry.anim.name,
+        layer: s.layer,
+        offsetX: s.offsetX,
+        offsetY: s.offsetY,
+        scale: s.scale ?? (s.animEntry?.stem === 'Extras' ? 0.2 : 0.5),
+        fps: s.fps ?? 8,
+      }));
+
+    const comp = { id: compId, layers };
+    const existing = this.animationCompositions.compositions.filter((c) => c.id !== compId);
+    existing.push(comp);
+    this.animationCompositions = { compositions: existing };
+    try {
+      localStorage.setItem('kknd-animation-compositions', JSON.stringify(this.animationCompositions));
+    } catch {}
+
+    const json = JSON.stringify(this.animationCompositions, null, 2);
+    let statusMsg = 'Saved! ';
+    try {
+      const res = await fetch('/api/save-compositions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: json,
+      });
+      if (res.ok) {
+        statusMsg += 'Written to viewer/src/ (old file backed up). ';
+      }
+    } catch {}
+
+    const blob = new Blob([json], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'animation-compositions.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    document.getElementById('configure-status').textContent = statusMsg + 'Switch to Units tab to see updates.';
+  }
+
   switchTab(tab) {
     const tabSprite = document.getElementById('tab-sprite');
     const tabUnits = document.getElementById('tab-units');
     const tabEffects = document.getElementById('tab-effects');
+    const tabConfigure = document.getElementById('tab-configure');
     const spriteUI = document.getElementById('sprite-viewer-ui');
     const unitsUI = document.getElementById('units-ui');
     const effectsUI = document.getElementById('effects-ui');
+    const configureUI = document.getElementById('configure-ui');
 
     this.activeTab = tab;
     tabSprite.classList.toggle('active', tab === 'sprite');
     tabUnits.classList.toggle('active', tab === 'units');
     tabEffects.classList.toggle('active', tab === 'effects');
+    tabConfigure.classList.toggle('active', tab === 'configure');
     spriteUI.classList.toggle('active', tab === 'sprite');
     unitsUI.classList.toggle('active', tab === 'units');
     effectsUI.classList.toggle('active', tab === 'effects');
+    configureUI.classList.toggle('active', tab === 'configure');
 
     if (tab === 'sprite') {
       this.hideUnitGrid();
       this.hideEffectsGrid();
+      this.hideConfigureGrid();
       if (this.sprite) this.sprite.setVisible(true);
     } else if (tab === 'units') {
       this.hideEffectsGrid();
+      this.hideConfigureGrid();
       if (this.sprite) this.sprite.setVisible(false);
       const sel = document.getElementById('unit-select');
       if (sel.value) this.loadUnitGrid(JSON.parse(sel.value));
+    } else if (tab === 'configure') {
+      this.hideUnitGrid();
+      this.hideEffectsGrid();
+      if (this.sprite) this.sprite.setVisible(false);
+      this.buildConfigureCompositionSelector();
+      this.buildConfigureSlotsDropdowns();
+      this.scheduleConfigureLoad();
     } else {
       this.hideUnitGrid();
+      this.hideConfigureGrid();
       if (this.sprite) this.sprite.setVisible(false);
       this.loadEffectsGrid();
     }
@@ -242,7 +864,53 @@ class ViewerScene extends Phaser.Scene {
       }).setOrigin(0.5, 1).setDepth(2);
 
       let shootEffect = null;
-      if (this.unitGridStem === 'SWAT' && ATTACK_TO_SHOOT_EFFECT[anim.name] && this.effectsGridLoaded) {
+      const compId = `${this.unitGridStem}/${anim.name}`;
+      const comp = this.animationCompositions?.compositions?.find((c) => c.id === compId);
+      if (comp && comp.layers?.length > 0 && this.effectsGridLoaded) {
+        const overlayLayers = comp.layers.filter((l) => l.stem !== this.unitGridStem);
+        if (overlayLayers.length > 0) {
+          const overlaySprites = [];
+          const unitLayer = comp.layers?.find((l) => l.stem === this.unitGridStem);
+          const unitLayerScale = unitLayer?.scale ?? 0.5;
+          const unitOffsetX = unitLayer?.offsetX ?? 0;
+          const unitOffsetY = unitLayer?.offsetY ?? 0;
+          // Configure uses unit scale 0.5; convert offset from Configure space to Units cell space
+          // Use effect position relative to unit so placement matches Configure
+          const offsetScale = scale / unitLayerScale;
+          for (const layer of overlayLayers) {
+            const effectAnim = EFFECTS_ANIMATIONS.find((a) => a.name === layer.anim);
+            if (!effectAnim?.frames?.length) continue;
+            const frameI = effectAnim.frames[0];
+            const effectKey = `f-${layer.stem}-${frameI}`;
+            if (!this.textures.exists(effectKey)) continue;
+            const relX = (layer.offsetX ?? 0) - unitOffsetX;
+            const relY = (layer.offsetY ?? 0) - unitOffsetY;
+            const effectSprite = this.add.sprite(
+              cx + relX * offsetScale,
+              cy + relY * offsetScale,
+              effectKey
+            );
+            effectSprite.setDepth(1 + layer.layer * 0.5);
+            const effectScale = layer.scale != null
+              ? scale * (layer.scale / unitLayerScale)
+              : scale * SHOOT_EFFECT_SCALE;
+            effectSprite.setScale(effectScale);
+            const effectFrameData = this.effectsGridMeta?.frames?.find((f) => f.i === frameI);
+            if (effectFrameData) {
+              const tex = effectSprite.texture;
+              const w = tex.getSourceImage().width || 1;
+              const h = tex.getSourceImage().height || 1;
+              effectSprite.setOrigin(
+                Math.max(0, Math.min(1, effectFrameData.ox / w)),
+                Math.max(0, Math.min(1, effectFrameData.oy / h))
+              );
+            }
+            overlaySprites.push({ sprite: effectSprite, layer, effectAnim });
+          }
+          if (overlaySprites.length > 0) shootEffect = { overlaySprites };
+        }
+      }
+      if (!shootEffect && this.unitGridStem === 'SWAT' && ATTACK_TO_SHOOT_EFFECT[anim.name] && this.effectsGridLoaded) {
         const shoot = ATTACK_TO_SHOOT_EFFECT[anim.name];
         const effectKey = `f-Extras-${shoot.frames[0]}`;
         if (this.textures.exists(effectKey)) {
@@ -299,24 +967,48 @@ class ViewerScene extends Phaser.Scene {
     }
 
     if (shootEffect) {
-      const { sprite: effectSprite, shoot } = shootEffect;
-      const effectFrameIdx = Math.min(
-        Math.floor((frameIndex / anim.frames.length) * shoot.frames.length),
-        shoot.frames.length - 1
-      );
-      const effectFrameI = shoot.frames[effectFrameIdx];
-      const effectKey = `f-Extras-${effectFrameI}`;
-      if (this.textures.exists(effectKey)) {
-        effectSprite.setTexture(effectKey);
-        const effectFrameData = this.effectsGridMeta?.frames?.find((f) => f.i === effectFrameI);
-        if (effectFrameData) {
-          const tex = effectSprite.texture;
-          const w = tex.getSourceImage().width || 1;
-          const h = tex.getSourceImage().height || 1;
-          effectSprite.setOrigin(
-            Math.max(0, Math.min(1, effectFrameData.ox / w)),
-            Math.max(0, Math.min(1, effectFrameData.oy / h))
+      if (shootEffect.overlaySprites) {
+        for (const { sprite: effectSprite, layer, effectAnim } of shootEffect.overlaySprites) {
+          const effectFrameIdx = Math.min(
+            Math.floor((frameIndex / anim.frames.length) * effectAnim.frames.length),
+            effectAnim.frames.length - 1
           );
+          const effectFrameI = effectAnim.frames[effectFrameIdx];
+          const effectKey = `f-${layer.stem}-${effectFrameI}`;
+          if (this.textures.exists(effectKey)) {
+            effectSprite.setTexture(effectKey);
+            const effectFrameData = this.effectsGridMeta?.frames?.find((f) => f.i === effectFrameI);
+            if (effectFrameData) {
+              const tex = effectSprite.texture;
+              const w = tex.getSourceImage().width || 1;
+              const h = tex.getSourceImage().height || 1;
+              effectSprite.setOrigin(
+                Math.max(0, Math.min(1, effectFrameData.ox / w)),
+                Math.max(0, Math.min(1, effectFrameData.oy / h))
+              );
+            }
+          }
+        }
+      } else {
+        const { sprite: effectSprite, shoot } = shootEffect;
+        const effectFrameIdx = Math.min(
+          Math.floor((frameIndex / anim.frames.length) * shoot.frames.length),
+          shoot.frames.length - 1
+        );
+        const effectFrameI = shoot.frames[effectFrameIdx];
+        const effectKey = `f-Extras-${effectFrameI}`;
+        if (this.textures.exists(effectKey)) {
+          effectSprite.setTexture(effectKey);
+          const effectFrameData = this.effectsGridMeta?.frames?.find((f) => f.i === effectFrameI);
+          if (effectFrameData) {
+            const tex = effectSprite.texture;
+            const w = tex.getSourceImage().width || 1;
+            const h = tex.getSourceImage().height || 1;
+            effectSprite.setOrigin(
+              Math.max(0, Math.min(1, effectFrameData.ox / w)),
+              Math.max(0, Math.min(1, effectFrameData.oy / h))
+            );
+          }
         }
       }
     }
@@ -326,7 +1018,13 @@ class ViewerScene extends Phaser.Scene {
     for (const cell of this.unitGridSprites) {
       cell.sprite.destroy();
       cell.label.destroy();
-      if (cell.shootEffect) cell.shootEffect.sprite.destroy();
+      if (cell.shootEffect) {
+        if (cell.shootEffect.overlaySprites) {
+          for (const { sprite } of cell.shootEffect.overlaySprites) sprite.destroy();
+        } else {
+          cell.shootEffect.sprite.destroy();
+        }
+      }
     }
     this.unitGridSprites = [];
   }
@@ -627,6 +1325,22 @@ class ViewerScene extends Phaser.Scene {
   }
 
   update(time, delta) {
+    if (this.activeTab === 'configure' && this.configurePlaying && this.configureGridSprites.length > 0) {
+      for (const cell of this.configureGridSprites) {
+        cell.lastAdvance += delta;
+        const slot = this.configureSlots[cell.slot.slotIndex - 1];
+        if (slot?.animEntry?.anim?.frames?.length) {
+          const msPerFrame = 1000 / (slot.fps ?? 8);
+          while (cell.lastAdvance >= msPerFrame) {
+            cell.lastAdvance -= msPerFrame;
+            cell.frameIndex = (cell.frameIndex + 1) % slot.animEntry.anim.frames.length;
+            this.applyConfigureGridFrame(cell);
+          }
+        }
+      }
+      return;
+    }
+
     if (this.activeTab === 'effects' && this.effectsGridSprites.length > 0) {
       const msPerFrame = 125; // 8 FPS
       for (const cell of this.effectsGridSprites) {

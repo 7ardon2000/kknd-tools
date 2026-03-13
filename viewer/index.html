@@ -87,6 +87,7 @@
       <button id="tab-sprite" class="active">Sprite Viewer</button>
       <button id="tab-units">Units</button>
       <button id="tab-effects">Effects</button>
+      <button id="tab-configure">Configure</button>
     </div>
     <div id="sprite-viewer-ui" class="tab-content active">
       <label>
@@ -120,6 +121,87 @@
     </div>
     <div id="effects-ui" class="tab-content">
       <span id="effects-status">Effects — 59 animations at 8 FPS (Extras)</span>
+    </div>
+    <div id="configure-ui" class="tab-content">
+      <label>
+        Animation to edit:
+        <select id="configure-composition-select">
+          <option value="">-- Select animation --</option>
+        </select>
+      </label>
+      <label id="configure-id-label" style="display: none;">
+        Composition ID: <span id="configure-id-display"></span>
+      </label>
+      <label id="configure-id-input-label" style="display: none;">
+        Composition ID:
+        <input type="text" id="composition-id" placeholder="e.g. SWAT/attack north" style="width: 180px; padding: 4px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 4px;" />
+      </label>
+      <div class="configure-slots">
+        <label>
+          Slot 1:
+          <select id="configure-slot-1">
+            <option value="">-- None --</option>
+          </select>
+          Layer:
+          <select id="configure-layer-1">
+            <option value="0">0 (back)</option>
+            <option value="1">1</option>
+            <option value="2">2 (front)</option>
+          </select>
+          Scale:
+          <input type="range" id="configure-scale-1" min="0.05" max="2" step="0.05" value="0.5" style="width: 80px;" title="Size" />
+          <span id="configure-scale-val-1" style="font-size: 11px; min-width: 32px;">0.5</span>
+          FPS:
+          <input type="number" id="configure-fps-1" min="1" max="60" value="8" style="width: 48px; padding: 2px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 4px;" />
+        </label>
+        <label>
+          Slot 2:
+          <select id="configure-slot-2">
+            <option value="">-- None --</option>
+          </select>
+          Layer:
+          <select id="configure-layer-2">
+            <option value="0">0 (back)</option>
+            <option value="1" selected>1</option>
+            <option value="2">2 (front)</option>
+          </select>
+          Scale:
+          <input type="range" id="configure-scale-2" min="0.05" max="2" step="0.05" value="0.2" style="width: 80px;" />
+          <span id="configure-scale-val-2" style="font-size: 11px; min-width: 32px;">0.2</span>
+          FPS:
+          <input type="number" id="configure-fps-2" min="1" max="60" value="8" style="width: 48px; padding: 2px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 4px;" />
+        </label>
+        <label>
+          Slot 3:
+          <select id="configure-slot-3">
+            <option value="">-- None --</option>
+          </select>
+          Layer:
+          <select id="configure-layer-3">
+            <option value="0">0 (back)</option>
+            <option value="1">1</option>
+            <option value="2" selected>2 (front)</option>
+          </select>
+          Scale:
+          <input type="range" id="configure-scale-3" min="0.05" max="2" step="0.05" value="0.2" style="width: 80px;" />
+          <span id="configure-scale-val-3" style="font-size: 11px; min-width: 32px;">0.2</span>
+          FPS:
+          <input type="number" id="configure-fps-3" min="1" max="60" value="8" style="width: 48px; padding: 2px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 4px;" />
+        </label>
+      </div>
+      <label>
+        Move layer:
+        <select id="configure-move-slot">
+          <option value="1">Slot 1</option>
+          <option value="2">Slot 2</option>
+          <option value="3">Slot 3</option>
+        </select>
+      </label>
+      <span style="font-size: 11px; color: #888;">(arrow keys)</span>
+      <button id="configure-play-btn">Play</button>
+      <button id="configure-step-btn" class="secondary">Step</button>
+      <button id="configure-save-btn">Save</button>
+      <span id="configure-status">Configure — select animations, drag or use arrow keys to move, save</span>
     </div>
   </div>
   <div id="canvas-wrapper"></div>

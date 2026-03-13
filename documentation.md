@@ -139,6 +139,40 @@ Open http://localhost:5173
 - **Sprite Viewer** – Load any sprite, filter by direction/animation, and play at configurable speed.
 - **Units** – Select an infantry-type unit from a dropdown to view its 25 animations in a 5×5 grid at 8 FPS. All units share the same frame layout (stand, move, attack in 8 directions plus stand south2) for comparison. For SWAT, shoot effects (shootNorth1, shootEast1, etc.) from Extras are overlaid in front of the rifle barrel during attack animations. Available units: ElPresidente, Flamer, Harry, Infantry, KingZog, Mech, Mekanik, Pyromaniac, Rioter, RocketInfantry, RocketLauncher, Saboteur, Sapper, Sniper, Swat, Technician, Vandal.
 - **Effects** – Displays 59 effect animations from Extras (effects/extras) in a grid at 8 FPS: shrapnel, dust, fire, explosions, acid, electricity, craters, laser, death, and shoot effects. Definitions in `viewer/src/effects-config.js`.
+- **Configure** – Compose up to 3 animations (from units and effects) on a draggable grid to define precise positioning. Select animations per slot, assign layers (0=back, 2=front), set scale (0.05×–2×) and FPS (1–60) per layer, drag sprites to set offsets, then Save to download `animation-compositions.json`. Place the file in `viewer/src/` so the Units tab uses it for SWAT attack + shoot effect overlays (replacing hardcoded offsets). Definitions in `viewer/src/configure-config.js`.
+
+### Configure tab (animation composition)
+
+Use the Configure tab to fix incorrect shoot effect positioning (e.g. SWAT attack + shoot animations):
+
+1. **Select animation to edit** from the dropdown: SWAT attack north, northeast, east, etc., or "New composition…". Choosing a SWAT attack loads its current composition into the slots.
+2. Configure layers, scale, and FPS per slot.
+3. Drag sprites or use arrow keys (Shift+arrow = 5 px) to position; mouse scroll to zoom.
+
+4. Click **Save** to update compositions in memory and download `animation-compositions.json`. Switch to Units tab to see updates. For "New composition…", enter a Composition ID first.
+
+The Units tab uses compositions from memory. Save writes to `viewer/src/animation-compositions.json` (via dev server), backs up the previous file to `animation-compositions.json.backup`, and stores in localStorage. Switch to Units tab to see updates immediately.
+
+### Animation compositions file format
+
+`viewer/src/animation-compositions.json`:
+
+```json
+{
+  "compositions": [
+    {
+      "id": "SWAT/attack north",
+      "layers": [
+        { "source": "units/swat", "stem": "SWAT", "anim": "attack north", "layer": 0, "offsetX": 0, "offsetY": 0 },
+        { "source": "effects/extras", "stem": "Extras", "anim": "shootNorth1", "layer": 1, "offsetX": -1, "offsetY": -9 }
+      ]
+    }
+  ]
+}
+```
+
+- **id**: Matches `{unitStem}/{animName}` for the Units tab (e.g. `SWAT/attack north`).
+- **layers**: Ordered by `layer`; base unit at 0, overlays (e.g. shoot effects) at 1, 2. Each layer has `source`, `stem`, `anim`, `layer`, `offsetX`, `offsetY`, `scale` (optional, default from type), `fps` (optional, default 8).
 
 ### Viewer controls (Sprite Viewer tab)
 
@@ -192,7 +226,9 @@ kknd-assets/
 │   │   ├── main.js
 │   │   ├── sprites.json   # Generated sprite manifest
 │   │   ├── unit-config.js     # Units tab: animation definitions + unit list
-│   │   └── effects-config.js  # Effects tab: Extras effect animations
+│   │   ├── effects-config.js  # Effects tab: Extras effect animations
+│   │   ├── configure-config.js     # Configure tab: getAllAnimations
+│   │   └── animation-compositions.json  # Optional: composition overlays (from Configure tab)
 │   └── index.html
 ├── extract-assets.ps1
 ├── extract_mobd.py
@@ -254,6 +290,17 @@ After extraction, game content is copied to:
 
 ## Changelog
 
+- **2026-03-13**: Configure tab
+  - Composition-first workflow: select animation to edit (SWAT attack north, etc.) from dropdown; loads into slots
+  - Save updates in-memory compositions; switch to Units tab to see updates without reload
+  - New Configure tab to compose up to 3 animations (units + effects) on a draggable grid
+  - Select animations per slot, assign layers, set scale (0.05×–2×) and FPS (1–60) per layer independently
+  - Drag to set offsets, Save downloads `animation-compositions.json` (includes scale/fps per layer)
+  - Units tab uses composition overlays when file exists (replaces `ATTACK_TO_SHOOT_EFFECT` for SWAT)
+  - Predefined SWAT attack compositions for all 8 directions with tuned scale (0.3), fps (4), and offsets
+  - Overlay rendering uses `layer.scale` from composition when present (preserves Configure tab ratio)
+- Offset conversion: effect position is relative to unit; scaled by `(cellScale / unitLayerScale)` to match Configure
+  - `viewer/src/configure-config.js`, `viewer/src/animation-compositions.json`
 - **2026-03-13**: Effects tab
   - New tab displaying 59 Extras effect animations (shrapnel, dust, fire, explosions, acid, electricity, craters, laser, death, shoot) in a grid at 8 FPS
   - `viewer/src/effects-config.js` defines `EFFECTS_ANIMATIONS`
