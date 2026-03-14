@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 KKnD MOBD/LVL Extractor - Extracts unit frames and effects from sprites.lvl to PNG.
-Ported from OpenKrush MobdLoader, Lvl, MobdImage (Gen1/SPRT format).
+Supports Gen1 (SPRT) and Gen2 (SPNS/SPRC) formats.
 Requires: pip install Pillow
 """
 
@@ -26,7 +26,7 @@ def read_struct(f, fmt):
 
 
 def load_palette(palette_path):
-    """Load 256-color palette from OpenKrush palette.png"""
+    """Load 256-color palette from a PNG file (e.g. palette.png)."""
     img = Image.open(palette_path)
     if img.mode == 'P' and 'transparency' in img.info:
         palette = list(img.getcolors(256)) if img.getcolors else []
@@ -462,22 +462,16 @@ def extract_mobd_to_png(lvl_data, offset, size, output_dir, palette, name):
 def main():
     import os
     base = Path(__file__).parent
-    content_dir = Path(os.environ.get('OPENRA_CONTENT', str(base / 'content')))
-    sprites_lvl = content_dir / 'openkrush_gen1' / 'sprites.lvl'
-    if not sprites_lvl.exists():
-        sprites_lvl = Path(os.environ['APPDATA']) / 'OpenRA' / 'Content' / 'openkrush_gen1' / 'sprites.lvl'
-    lookup_path = base / 'openkrush' / 'mods' / 'openkrush_gen1' / 'archives' / 'sprites.lvl.yaml'
-    palette_path = base / 'openkrush' / 'mods' / 'openkrush_gen1' / 'core' / 'rules' / 'palette.png'
+    content_dir = Path(os.environ.get('KKND_CONTENT', str(base / 'content')))
+    sprites_lvl = content_dir / 'sprites.lvl'
+    lookup_path = content_dir / 'sprites.lvl.yaml'
+    palette_path = content_dir / 'palette.png'
 
     if not sprites_lvl.exists():
-        apd = os.environ.get('APPDATA', '')
-        if apd:
-            sprites_lvl = Path(apd) / 'OpenRA' / 'Content' / 'openkrush_gen1' / 'sprites.lvl'
-    if not sprites_lvl.exists():
-        print("sprites.lvl not found. Run extract-assets.ps1 first to copy game content.")
+        print("sprites.lvl not found in content/. Run extract-assets.ps1 first to copy game content from KKnD Xtreme.")
         sys.exit(1)
     if not palette_path.exists():
-        print(f"palette.png not found at {palette_path}")
+        print(f"palette.png not found in content/. Gen1 sprites require a 256-color palette. Place palette.png in {content_dir}")
         sys.exit(1)
 
     palette = load_palette(palette_path)

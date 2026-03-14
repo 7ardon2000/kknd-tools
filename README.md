@@ -1,34 +1,38 @@
-# KKnD Assets
+# KKnD Tools
 
-Tools and extracted assets for **KKnD** (Krush Kill 'n Destroy) unit frames and effects from the [OpenKrush](https://github.com/IceReaper/OpenKrush) mod (OpenRA engine).
+A set of **modding tools** for **KKnD** (Krush Kill 'n Destroy) — built by fans, for fans. Extract sprites, preview animations, and tinker with game assets for **solo, offline, just-for-fun** projects.
+
+> **Disclaimer:** These tools are intended for **enthusiastic fans** who want more freedom to create personal mods — for testing, experimentation, and fun. **Single-player and offline use only.** Not for multiplayer, competitive, or commercial use.
 
 ## What You Get
 
-- **81 MOBD sprites** converted to PNG frames (~9,500 PNGs) with metadata
-- **Frame metadata** (`*_frames.json`) describing rotational/simple animations, directions, and per-frame offsets (ox, oy)
-- **Phaser Animation Viewer** – browser tool to verify and preview animations
-- **PNG assets** from the mod: sidebars, unit icons, UI (chrome, dialog, glyphs, logo)
+- **MOBD/LVL extractor** — Converts sprite data from `SPRITES.LVL` to PNG frames with metadata
+- **Frame metadata** (`*_frames.json`) — Rotational/simple animations, directions, per-frame offsets (ox, oy)
+- **Phaser Animation Viewer** — Browser tool to preview and verify extracted animations
+- **Scripts** — Python + PowerShell for extraction and manifest generation
 
 ## Quick Start
 
 ```powershell
-# 1. Clone OpenKrush
-git clone https://github.com/IceReaper/OpenKrush.git openkrush
-
-# 2. Run extraction
+# 1. Ensure KKnD Xtreme is installed at C:\Games\KKND Xtreme
+# 2. Run extraction (copies game files to content/, extracts MOBD → PNG)
 .\extract-assets.ps1
 
-# 3. Run the animation viewer
+# 3. For Gen1 sprites, place palette.png in content/ (256-color palette from your game)
+
+# 4. Run the animation viewer
 npm start
 ```
 
-**Requires**: [KKnD Xtreme](https://store.steampowered.com/app/281030/KKND_Xtreme/) at `C:\Games\KKND Xtreme`, Python 3, Pillow, Node.js 18+
+Open http://localhost:5173 to preview animations.
+
+**Requires:** [KKnD Xtreme](https://store.steampowered.com/app/281030/KKND_Xtreme/) at `C:\Games\KKND Xtreme`, Python 3, Pillow, Node.js 18+
 
 ## Extraction
 
-- **Phase 0**: Copies game content (SPRITES.LVL, MUTE.SLV, SURV.SLV) to OpenRA.
-- **Phase 1**: Copies PNG assets (sidebars, icons, UI) from the mod.
-- **Phase 2**: Parses MOBD from `sprites.lvl`, exports PNG frames, and writes metadata.
+1. **Phase 0** — Copies game content (SPRITES.LVL, MUTE.SLV, SURV.SLV) from KKnD Xtreme into `content/`
+2. **Phase 1** — Optional: Copy PNG assets (sidebar, UI) if you provide `-SourcePath` to a compatible source
+3. **Phase 2** — Parses MOBD from `sprites.lvl`, exports PNG frames, writes metadata
 
 See [documentation.md](documentation.md) for details.
 
@@ -52,10 +56,10 @@ Each sprite folder contains `{Name}_frames.json`:
 - **anim**: `"rotational"` or `"simple"`
 - **frame**: Index within current animation
 - **ox**, **oy**: Anchor point for correct placement
-- **dir** (rotational): Direction 0..N (0=N, 1=NE, …)
-- **idx** (simple): Animation index 0..M
+- **dir** (rotational): Direction 0..N
+- **idx** (simple): Animation index
 
-See [documentation.md#metadata-file-format](documentation.md#metadata-file-format-name_framesjson) for full details.
+See [documentation.md](documentation.md) for full details.
 
 ## Animation Viewer
 
@@ -63,7 +67,7 @@ See [documentation.md#metadata-file-format](documentation.md#metadata-file-forma
 npm start
 ```
 
-Open http://localhost:5173. Pick a sprite, filter by direction/anim, and play. Per-frame hotspot (ox, oy) is applied for correct placement.
+Pick a sprite, filter by direction/anim, and play. Per-frame hotspot (ox, oy) is applied for correct placement.
 
 After extraction, regenerate the sprite list:
 
@@ -74,11 +78,14 @@ python scripts/generate-viewer-manifest.py
 ## Output Layout
 
 ```
-units/direwolf/     → DireWolf.mobd, DireWolf_0000.png..0247.png, DireWolf_frames.json
-effects/extras/     → Extras.mobd, Extras_0000.png..0391.png, Extras_frames.json
-ui/buttons/         → Buttons.mobd, Buttons_*.png, Buttons_frames.json
-viewer/             → Phaser animation tester
+content/              → sprites.lvl, palette.png (game content; not committed)
+units/direwolf/       → DireWolf.mobd, DireWolf_0000.png..0247.png, DireWolf_frames.json
+effects/extras/       → Extras.mobd, Extras_0000.png..0391.png, Extras_frames.json
+ui/buttons/          → Buttons.mobd, Buttons_*.png, Buttons_frames.json
+viewer/               → Phaser animation tester
 ```
+
+**Note:** Extracted PNGs and `content/` are kept locally for testing. They are not committed to the repo.
 
 ## Documentation
 
@@ -87,9 +94,8 @@ See [documentation.md](documentation.md) for:
 - How extraction works (phases 0–2)
 - Metadata format and field meanings
 - How to run and use the animation viewer
-- Script parameters
-- Changelog
+- Script parameters and options
 
 ## License
 
-Scripts: GPL-3.0. See [LICENSE](LICENSE). Extracted assets derive from KKnD and OpenKrush; their use may be subject to the original game’s and mod’s terms.
+Scripts: GPL-3.0. See [LICENSE](LICENSE). Use responsibly — for personal, non-commercial, offline modding fun only.

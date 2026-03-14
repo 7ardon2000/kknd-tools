@@ -10,7 +10,7 @@ def main():
     repo = Path(__file__).parent.parent
     out_path = repo / 'viewer' / 'src' / 'sprites.json'
     entries = []
-    skip_dirs = {'dist', 'node_modules', '.git', 'openkrush'}
+    skip_dirs = {'dist', 'node_modules', '.git', 'content'}
 
     for frames_file in sorted(repo.rglob('*_frames.json')):
         if any(part in skip_dirs for part in frames_file.parts):

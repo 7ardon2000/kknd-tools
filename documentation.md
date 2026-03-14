@@ -1,10 +1,9 @@
 # KKnD Asset Extraction – Documentation
 
-Extracts unit frame images and effects from the [OpenKrush](https://github.com/IceReaper/OpenKrush) mod (KKnD/KKnD2 remake on OpenRA engine) into organized local folders.
+Tools for **KKnD** (Krush Kill 'n Destroy) fans to extract unit frames and effects from game files into organized local folders. Built for **solo, offline modding** — testing, experimentation, and fun.
 
 ## Prerequisites
 
-- **Git** – to clone OpenKrush
 - **PowerShell 5+**
 - **Python 3** with Pillow (`pip install Pillow`) – for MOBD extraction
 - **KKnD Xtreme** install at `C:\Games\KKND Xtreme` – provides `LEVELS\640\SPRITES.LVL`, `LEVELS\MUTE.SLV`, `LEVELS\SURV.SLV`
@@ -15,11 +14,11 @@ Extracts unit frame images and effects from the [OpenKrush](https://github.com/I
 ## Quick Start
 
 ```powershell
-# 1. Clone OpenKrush (if not already present)
-git clone https://github.com/IceReaper/OpenKrush.git openkrush
-
-# 2. Run extraction
+# 1. Ensure KKnD Xtreme is installed at C:\Games\KKND Xtreme
+# 2. Run extraction (copies game files to content/, extracts MOBD → PNG)
 .\extract-assets.ps1
+
+# 3. For Gen1 sprites, place palette.png in content/ (256-color palette from your game)
 ```
 
 ---
@@ -30,23 +29,23 @@ git clone https://github.com/IceReaper/OpenKrush.git openkrush
 
 The script copies required game files to OpenRA’s content directory so the MOBD extractor can read them:
 
-- `LEVELS\640\SPRITES.LVL` → `%APPDATA%\OpenRA\Content\openkrush_gen1\sprites.lvl`
+- `LEVELS\640\SPRITES.LVL` → `content\sprites.lvl`
 - `LEVELS\MUTE.SLV` → `mute.slv`
 - `LEVELS\SURV.SLV` → `surv.slv`
 
-### Phase 1: PNG assets
+### Phase 1: PNG assets (optional)
 
-Sidebars, unit icons, and UI assets (chrome, dialog, glyphs, logo) are copied from the OpenKrush mod.
+If you provide `-SourcePath` pointing to a compatible `mods/` structure, sidebars, unit icons, UI assets (chrome, dialog, glyphs, logo), and palette are copied. Otherwise, place `palette.png` in `content/` manually for Gen1 sprites.
 
 ### Phase 2: MOBD extraction
 
-1. **LVL parsing**: `extract_mobd.py` reads `sprites.lvl`, which embeds multiple `.mobd` files.
+1. **LVL parsing**: `extract_mobd.py` reads `content/sprites.lvl`, which embeds multiple `.mobd` files.
 2. **MOBD parsing**: Each MOBD has:
    - **Rotational animations** (0..N): one animation per facing (8 or 16 directions). Each direction is a sequence of frames (e.g. walk cycle, attack).
    - **Simple animations** (0..M): non-directional (death, spawn, etc.).
 3. **Frame export**: For each frame the extractor:
    - Decodes the pixel data (Gen1/SPRT or Gen2/SPNS)
-   - Applies the palette (OpenKrush `palette.png` or embedded)
+   - Applies the palette (`content/palette.png` for Gen1, or embedded for Gen2)
    - Makes index 0 transparent
    - Writes `{Name}_{i:04d}.png` (e.g. `DireWolf_0000.png`, `DireWolf_0001.png`, …)
 4. **Metadata**: Each MOBD folder gets `{Name}_frames.json` with frame structure and per-frame offsets.
@@ -204,7 +203,8 @@ This writes `viewer/src/sprites.json` and must be run from the project root.
 ## Output Structure
 
 ```
-kknd-assets/
+kknd-tools/
+├── content/             # Game files (sprites.lvl, palette.png) — not committed
 ├── units/
 │   ├── direwolf/          # DireWolf.mobd, DireWolf_0000.png..0247.png, DireWolf_frames.json
 │   ├── swat/
@@ -248,12 +248,12 @@ kknd-assets/
 ## Script Parameters
 
 ```powershell
-.\extract-assets.ps1 [-OpenKrushPath <path>] [-OutputPath <path>] [-KKnDXtremePath <path>]
+.\extract-assets.ps1 [-SourcePath <path>] [-OutputPath <path>] [-KKnDXtremePath <path>]
 ```
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| OpenKrushPath | `.\openkrush` | Path to OpenKrush clone |
+| SourcePath | *(none)* | Optional. Path to folder with mods/ structure for PNG assets and palette |
 | OutputPath | `$PSScriptRoot` | Output directory |
 | KKnDXtremePath | `C:\Games\KKND Xtreme` | KKnD Xtreme installation |
 
@@ -272,25 +272,24 @@ kknd-assets/
 - **Raw .mobd**: Extracted from `sprites.lvl` into `units/`, `effects/`, `ui/`
 - **PNG frames**: Parsed and exported as `{Name}_{i:04d}.png`; index 0 is transparent
 - **Metadata**: `{Name}_frames.json` with animation structure and per-frame `ox`, `oy`
-- **Palette**: Gen1 uses OpenKrush `palette.png`; Gen2 uses embedded palette
+- **Palette**: Gen1 uses `content/palette.png`; Gen2 uses embedded palette
 
 ---
 
 ## Game Content Location
 
-After extraction, game content is copied to:
+After extraction, game content is copied to the local `content/` folder:
 
-- `%APPDATA%\OpenRA\Content\openkrush_gen1\`
-  - `sprites.lvl` (from `LEVELS\640\SPRITES.LVL`)
-  - `mute.slv`
-  - `surv.slv`
+- `content/sprites.lvl` (from `LEVELS\640\SPRITES.LVL`)
+- `content/mute.slv`
+- `content/surv.slv`
+- `content/palette.png` (required for Gen1; place manually or provide via `-SourcePath`)
 
 ---
 
-## Sources
+## References
 
-- [IceReaper/OpenKrush](https://github.com/IceReaper/OpenKrush) – KKnD mod for OpenRA
-- [Dzierzan/KKnD-1](https://github.com/Dzierzan/KKnD-1) – Fork (archived)
+- [Dzierzan/KKnD-1](https://github.com/Dzierzan/KKnD-1) – KKnD format research (archived)
 - Original KKnD Xtreme game files (SPRITES.LVL, MUTE.SLV, SURV.SLV)
 
 ---
@@ -361,3 +360,10 @@ Place `map_layer0.png` (base terrain) and `map_layer1.png` (scattered objects ov
   - Parses Mobd → MobdAnimation → MobdFrame → MobdRenderFlags → MobdImage
   - Gen1/Gen2 palette handling
 - **2026-03-12**: Initial implementation (Phase 0–2, extract-assets.ps1, extract_mobd.py)
+
+- **2026-03-14**: Repo cleanup and de-coupling
+  - Removed extracted PNG assets from repo (kept locally; added to .gitignore)
+  - Switched to local `content/` folder for game files instead of APPDATA
+  - Renamed `OpenKrushPath` → `SourcePath` (optional); Phase 1 now optional
+  - Removed all OpenKrush references from docs and README
+  - Revamped README: fan-modding, solo/offline, just-for-fun disclaimer

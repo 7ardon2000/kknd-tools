@@ -1,5 +1,9 @@
-# Dependencies
-openkrush/
+# Dependencies / optional sources
+content/
+source/
+
+# Extracted assets - do not commit (kept locally for viewer/testing)
+*.png
 
 # Python
 __pycache__/

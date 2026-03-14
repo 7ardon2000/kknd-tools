@@ -1,5 +1,5 @@
 {
-  "name": "kknd-assets",
+  "name": "kknd-tools",
   "private": true,
   "scripts": {
     "start": "cd viewer && npm run dev",
