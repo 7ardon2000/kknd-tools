@@ -48,7 +48,7 @@ If you provide `-SourcePath` pointing to a compatible `mods/` structure, sidebar
    - Applies the palette (`content/palette.png` for Gen1, or embedded for Gen2)
    - Makes index 0 transparent
    - Writes `{Name}_{i:04d}.png` (e.g. `DireWolf_0000.png`, `DireWolf_0001.png`, …)
-4. **Metadata**: Each MOBD folder gets `{Name}_frames.json` with frame structure and per-frame offsets.
+4. **Metadata**: Each MOBD folder gets `{Name}_frames.json` with frame structure, per-frame offsets (`ox`, `oy`), and per-frame `points` (from the MODB point list: projectile placement, turret, dock points). Use `python extract_mobd.py --metadata-only` to regenerate JSON without PNGs when palette is unavailable.
 
 ---
 
@@ -74,8 +74,11 @@ Each extracted MOBD folder contains a JSON file describing frame layout and anim
 | `frame` | number | Index within the current animation (0, 1, 2, …). |
 | `ox` | number | X offset of the anchor point inside the frame (pixels from left). Used to position the sprite correctly on the game grid. |
 | `oy` | number | Y offset of the anchor point inside the frame (pixels from top). |
+| `w` | number | *(If present)* Frame width from MOBD. Used by the viewer for correct sprite size in export and tester (especially for larger units like DireWolf). |
+| `h` | number | *(If present)* Frame height from MOBD. |
 | `dir` | number | *(Rotational only)* Direction index (0..rotational_count−1). 0 = N, 1 = NE, etc. |
 | `idx` | number | *(Simple only)* Simple animation index (0..simple_count−1). |
+| `points` | array | *(Optional)* Per-frame points from the MODB point list (projectile placement, turret, dock points, etc.). Each entry has `type`, `x`, `y`. Used by the Units tab for per-frame shoot effect positioning. |
 
 ### Examples
 
@@ -105,17 +108,28 @@ Each extracted MOBD folder contains a JSON file describing frame layout and anim
 ```
 → PNG: `Extras_0200.png`, simple animation index 0, sixth frame in that sequence.
 
+### Backfilling w/h into older metadata
+
+If your `*_frames.json` files lack `w` and `h` (e.g. from extraction before these were added), run:
+
+```bash
+python scripts/backfill_frames_metadata.py
+```
+
+This adds `w` and `h` from existing PNG dimensions to all frames. Run from project root.
+
 ### Using the metadata
 
 - Play a single direction: filter `frames` by `dir === selected_direction`.
 - Play a simple animation: filter `frames` by `idx === selected_animation`.
 - Use `ox` and `oy` when drawing so the sprite anchor matches the game position.
+- Use `points` for per-frame projectile/shoot effect placement: offset = (point.x - ox, point.y - oy). Prefer points with `type === 1` (projectile) when available.
 
 ---
 
 ## Animation Viewer (Phaser Tester)
 
-A small Phaser 3 app lets you view MOBD animations in the browser and check extraction.
+A small Phaser 3 app lets you view MOBD animations in the browser and check extraction. Uses a **unified four-section layout** (all sections visible at once, no tabs).
 
 ### Run the viewer
 
@@ -131,28 +145,27 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173
+Open http://localhost:5173 (or 5174 if 5173 is in use)
 
-### Viewer tabs
+### Unified layout (4 stacked sections)
 
-- **Sprite Viewer** – Load any sprite, filter by direction/animation, and play at configurable speed.
-- **Units** – Select an infantry-type unit from a dropdown to view its 25 animations in a 5×5 grid at 8 FPS. All units share the same frame layout (stand, move, attack in 8 directions plus stand south2) for comparison. For SWAT, shoot effects (shootNorth1, shootEast1, etc.) from Extras are overlaid in front of the rifle barrel during attack animations. Available units: ElPresidente, Flamer, Harry, Infantry, KingZog, Mech, Mekanik, Pyromaniac, Rioter, RocketInfantry, RocketLauncher, Saboteur, Sapper, Sniper, Swat, Technician, Vandal.
-- **Effects** – Displays 59 effect animations from Extras (effects/extras) in a grid at 8 FPS: shrapnel, dust, fire, explosions, acid, electricity, craters, laser, death, and shoot effects. Definitions in `viewer/src/effects-config.js`.
-- **Configure** – Compose up to 3 animations (from units and effects) on a draggable grid. Use the **Timeline** to place overlay layers on specific base frames, then **Export Spritesheet** to bake composited PNG spritesheets for game dev. Definitions in `viewer/src/configure-config.js`.
-- **Spritesheet Tester** – Test exported spritesheets on a two-layer map (base terrain + overlay). Load a spritesheet PNG (and optional JSON config) via the Load button; the animation plays at the center of the map. Mouse scroll to zoom.
+1. **Section 1 – Sprite Viewer (20%)** – Load any sprite, choose a preset (e.g. "stand north", "attack east") or Custom. Frame start/end define the visible range. Play, Step, Speed control playback. Preview area shows the current frame.
+2. **Section 2 – Animations (20%)** – **Unit** dropdown to select infantry units (ElPresidente, Flamer, SWAT, etc.) or Effects (Extras). Displays 25 unit animations or 59 effects in a horizontal row with scrollbar. Each cell shows animation name and plays at 8 FPS. Mouse wheel to zoom, scrollbar to pan. **Export** / **Export All** download spritesheet PNGs. **Test** / **Test All** send to Section 4. Click a cell to select.
+3. **Section 3 – Configure (flex)** – Compose up to 3 animations on a draggable grid. Timeline, layer/scale/FPS per slot. **Export** downloads spritesheet; **Test** sends to Section 4.
+4. **Section 4 – Spritesheet Tester (35%)** – Map background with FPS control. **Test** from Sections 2 or 3 loads the generated spritesheet and plays it; drag the sprite to reposition on the map. Mouse scroll to zoom.
 
-### Configure tab (animation composition and spritesheet export)
+### Configure section (animation composition and spritesheet export)
 
-Use the Configure tab to fix shoot effect positioning and export pre-composited spritesheets:
+Use Section 3 (Configure) to fix shoot effect positioning and export pre-composited spritesheets:
 
-1. **Select animation to edit** from the dropdown: SWAT attack north, northeast, east, etc., or "New composition…".
+1. **Select animation to edit** from the dropdown: SWAT attack north, northeast, east, etc., or "New composition…" (in Section 3).
 2. Configure layers, scale, and FPS per slot.
 3. **Timeline** – Click cells in overlay rows to place blocks: "this overlay appears on this base frame". Example: click frame 2 in the shoot-effect row so the muzzle flash plays only on the 3rd attack frame.
 4. Drag sprites or use arrow keys (Shift+arrow = 5 px) to position; mouse scroll to zoom.
 5. **Save** – Updates compositions in memory and downloads `animation-compositions.json`.
 6. **Export Spritesheet** – Renders the composed animation to a single PNG spritesheet (horizontal strip) plus a JSON with frame definitions. Downloads to your browser's Downloads folder. Format is compatible with Unity, Godot, Phaser, etc.
 
-**Using composited spritesheets in the Units tab:** Place the exported files in `units/{path}/composite/` (e.g. `units/swat/composite/`). Name them `{Stem}_{anim_name}.png` and `{Stem}_{anim_name}.json` (e.g. `SWAT_attack_north.png`). The Units tab will load and display composited spritesheets when available, bypassing the raw + overlay pipeline for accurate WYSIWYG output.
+**Using composited spritesheets:** Place the exported files in `units/{path}/composite/` (e.g. `units/swat/composite/`). Name them `{Stem}_{anim_name}.png` and `{Stem}_{anim_name}.json` (e.g. `SWAT_attack_north.png`). When available, compositions will use these for accurate WYSIWYG output.
 
 ### Animation compositions file format
 
@@ -176,17 +189,18 @@ Use the Configure tab to fix shoot effect positioning and export pre-composited 
 - **layers**: Ordered by `layer`; base unit at 0, overlays at 1, 2. Each layer has `source`, `stem`, `anim`, `layer`, `offsetX`, `offsetY`, `scale` (optional), `fps` (optional), and **timelineBlocks** (optional).
 - **timelineBlocks**: Array of `{ baseFrame }` — overlay appears only on those base frames. When an overlay has 2 frames and `baseFrame: 2`, both effect frames play during base frame 2 (output expands to 5 frames for a 4-frame attack).
 
-### Viewer controls (Sprite Viewer tab)
+### Section 1 controls (Sprite Viewer)
 
 | Control | Purpose |
 |--------|---------|
 | **Sprite** | Choose which unit/effect to load. |
-| **Direction / Anim** | Filter by rotational direction (Dir 0..N) or simple animation (Simple 0..M). |
+| **Preset** | Presets for units (UNIT_ANIMATIONS) or effects (EFFECTS_ANIMATIONS); "Custom" for manual frame range. |
+| **Frame start / end** | Define visible frame range. |
 | **Speed** | Playback speed (frames per second). |
 | **Play** | Start or pause animation. |
 | **Step** | Advance one frame. |
 
-The viewer applies `ox` and `oy` for each frame so sprites are positioned correctly. Units tab animation definitions and unit list are in `viewer/src/unit-config.js`. Effects tab uses `viewer/src/effects-config.js`.
+The viewer applies `ox` and `oy` for each frame so sprites are positioned correctly. Preset definitions in `viewer/src/unit-config.js` and `viewer/src/effects-config.js`.
 
 ### Regenerate sprite list
 
@@ -294,18 +308,17 @@ After extraction, game content is copied to the local `content/` folder:
 
 ---
 
-### Spritesheet Tester tab
+### Spritesheet Tester (Section 4)
 
-Test spritesheets exported from the Configure tab on a map background:
+Test spritesheets on a map background:
 
-1. Switch to the **Spritesheet Tester** tab. A second bar appears below the tab bar with a Spritesheet dropdown and map layer controls.
-2. The map layers (from `maps/map_layer0.png` and `maps/map_layer1.png`) load automatically.
-3. Use **Layer 0** and **Layer 1** checkboxes to toggle map layer visibility (uncheck Layer 1 to see the base terrain only).
-4. Select a spritesheet from the **Spritesheet** dropdown. Spritesheets are loaded from `spritesheets-test/`; add PNGs there and register them in `spritesheets.json` (see format below).
-5. The animation plays at the center of the map at 8 FPS.
-6. Use mouse scroll to zoom in and out.
+1. **Section 4** shows the map (from `maps/map_layer0.png` and `maps/map_layer1.png`), zoomed to fill the entire section (cover scaling).
+2. Use **Test** from Section 2 (Animations) or Section 3 (Configure) to load a generated spritesheet. It plays at the center of Section 4 on top of the map layers.
+3. **FPS** control sets playback speed.
+4. **Drag** the sprite to reposition it on the map.
+5. Use mouse scroll over Section 4 to zoom in and out.
 
-**Adding test spritesheets:** Place PNG files in `spritesheets-test/` and add entries to `spritesheets-test/spritesheets.json`:
+**Optional – adding test spritesheets manually:** You can also place PNG files in `spritesheets-test/` and register them in `spritesheets-test/spritesheets.json` for direct loading (if supported by the UI):
 
 ```json
 [
@@ -319,6 +332,44 @@ Place `map_layer0.png` (base terrain) and `map_layer1.png` (scattered objects ov
 
 ## Changelog
 
+- **2026-03-14**: Sprite Viewer height, Configure grid clipping, drag fix
+  - Section 1 (Sprite Viewer): Increased height (min-height 95px, canvas 65px), SECTION_BANDS adjusted (80px band); sprite centered in band
+  - Configure grid sprawl: Cameras 1, 2, 4 now ignore the configureGridContainer so zoomed grid no longer bleeds into other sections
+  - Configure drag: Use section-3-canvas getBoundingClientRect to detect clicks; sections use pointer-events: none with children auto so canvas-host clicks reach the canvas
+- **2026-03-14**: UI fixes and enhancements
+  - Layout: Section 1 reduced height (auto, 40px canvas) to remove dead space; Section 3 overflow: visible to eliminate vertical scrollbar; Section 2/4 proportions adjusted; SECTION_BANDS updated for new layout
+  - Section 2 (Animations): Added "Custom..." option — select sprite from dropdown, set frame start/end, click Load to display a horizontal strip of frames
+  - Section 3 (Configure): Zoom +/- buttons; drag-to-move now uses the Move dropdown selection (click anywhere in section to drag the selected slot)
+  - Section 4 (Tester): Zoom +/- buttons
+  - canvas-host: pointer-events: none so Phaser input receives clicks
+- **2026-03-14**: Spritesheet Tester (Section 4) map and animation layout
+  - Map now uses cover scaling (`Math.max`) so it fills the entire Section 4 viewport instead of fitting small in the center
+  - Test animation sprite is placed at the center of Section 4's camera view (computed from `getSection4Center()`)
+  - Map and sprite reposition correctly when the section viewport changes (resize)
+- **2026-03-14**: Frame sizing for large units (DireWolf, etc.) + Animations section base-only export
+  - Unit export and Spritesheet Tester use 1:1 sizing (unitScale=1, EXPORT_SCALE=1) so larger units display at correct size
+  - Custom mode: `generateAnimSpritesheet` and `testAllAnimations` use metadata `w`/`h` when available for frame dimensions
+  - **Animations section Export/Test**: Exports base unit animations only, no shoot-effect overlay (SWAT attack no longer includes muzzle flash)
+  - **Grid export bleed fix**: Per-cell clip and clear so sprites cannot bleed into adjacent cells (fixes yellow artifact from shoot effect bleeding into base frames)
+  - `scripts/backfill_frames_metadata.py`: Backfills `w`/`h` into existing `*_frames.json` from PNG dimensions when metadata lacks them
+- **2026-03-14**: Fix Export/Test Spritesheet Accuracy (Section 2)
+  - Section 2 Export/Test buttons for **units** now use the proven old Units export pipeline (`exportUnitGridAnimationToSpritesheet`, `exportAllUnitGridAnimationsToSpritesheet`) instead of the simplified `generateAnimSpritesheet`
+  - Pipeline uses per-frame bounds and unitScale/EXPORT_SCALE=1 for correct spritesheet output (see above for large-unit sizing fix)
+  - When a unit is loaded in Section 2, `unitGridMeta` and `unitGridStem` are synced so Export/Test use the same draw logic as the Units tab
+  - For **Effects (Extras)**, `generateAnimSpritesheet` remains in use (scope limited to units)
+  - `exportUnitGridAnimationToSpritesheet` and `exportAllUnitGridAnimationsToSpritesheet` accept optional `sendToTester` and `statusElId` params; when `sendToTester` is true, spritesheet is sent to Section 4 instead of downloaded
+  - Test All sends the first animation's row to the tester (25-row grid format; tester expects horizontal strip)
+- **2026-03-14**: Section 2 Unit selector + zoom
+  - Animations section: Unit dropdown (ElPresidente, Flamer, SWAT, etc.) and Effects (Extras); Phaser-rendered 1-row strip with correct animation-to-frame mapping (UNIT_ANIMATIONS, EFFECTS_ANIMATIONS)
+  - Mouse wheel zoom in all 4 sections (Sprite Viewer, Animations, Configure, Spritesheet Tester)
+  - Horizontal scrollbar for Animations strip when content overflows
+- **2026-03-14**: Unified Sprite Viewer layout
+  - Replaced tab-based UI with four stacked sections (Sprite Viewer 20%, Animations 20%, Configure flex, Spritesheet Tester 35%)
+  - Section 1: Sprite + Preset dropdown + Frame start/end; presets from UNIT_ANIMATIONS (units) or EFFECTS_ANIMATIONS (Extras)
+  - Section 2: 1-row horizontal animation strip; Export, Export All, Test, Test All (no shoot-effect controls)
+  - Section 3: Configure with Test button (sends spritesheet to Section 4)
+  - Section 4: FPS control, drag-to-place on map; Test from S2/S3 loads spritesheet
+  - Phaser multi-camera viewports for each section; removed Units/Effects tabs and shoot-effect controls
 - **2026-03-13**: Spritesheet Tester tab
   - New tab to test exported spritesheets on a two-layer map background
   - Second bar below tab bar (visible only when Spritesheet Tester is active) with Spritesheet dropdown

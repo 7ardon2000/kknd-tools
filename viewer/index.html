@@ -11,308 +11,181 @@
       font-family: system-ui, sans-serif;
       background: #1a1a1a;
       color: #e0e0e0;
-    }
-    #ui {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      padding: 12px;
-      background: rgba(0,0,0,0.8);
       display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      align-items: center;
-      z-index: 10;
+      flex-direction: column;
+      height: 100vh;
     }
-    #ui label { display: flex; align-items: center; gap: 6px; }
-    #ui select {
-      padding: 6px 10px;
+    .section {
+      flex-shrink: 0;
+      border-bottom: 1px solid #333;
+      background: rgba(0,0,0,0.6);
+    }
+    .section-1 { height: auto; min-height: 95px; padding: 8px 12px; }
+    .section-2 { height: 18vh; min-height: 110px; padding: 8px 12px; }
+    .section-3 { flex: 1; min-height: 200px; padding: 8px 12px; overflow: visible; }
+    .section-4 { height: 32vh; min-height: 180px; padding: 8px 12px; }
+
+    .section-header {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 6px;
+    }
+    label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+    select {
+      padding: 4px 8px;
       background: #2a2a2a;
       color: #e0e0e0;
       border: 1px solid #444;
       border-radius: 4px;
     }
-    #ui button {
+    input[type="number"] {
+      width: 48px;
+      padding: 4px 6px;
+      background: #2a2a2a;
+      color: #e0e0e0;
+      border: 1px solid #444;
+      border-radius: 4px;
+    }
+    button {
       padding: 6px 12px;
       background: #3a7bd5;
       color: white;
       border: none;
       border-radius: 4px;
       cursor: pointer;
+      font-size: 12px;
     }
-    #ui button:hover { background: #4a8be5; }
-    #ui button.secondary { background: #444; }
-    .tab-bar {
-      display: flex;
-      gap: 4px;
-      margin-bottom: 8px;
-    }
-    .tab-bar button {
-      padding: 6px 14px;
-      background: #2a2a2a;
-      color: #e0e0e0;
-      border: 1px solid #444;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    .tab-bar button:hover { background: #333; }
-    .tab-bar button.active {
-      background: #3a7bd5;
-      color: white;
-      border-color: #3a7bd5;
-    }
-    .tab-content { display: none; }
-    .tab-content.active { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-    #canvas-wrapper {
-      position: absolute;
-      top: 90px;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #111;
-    }
-    #canvas-wrapper.with-spritesheet-bar {
-      top: 132px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #111;
-    }
-    canvas {
-      display: block;
-      background: #222;
-    }
-    .configure-timeline {
-      width: 100%;
-      margin-top: 8px;
-      padding: 8px;
-      background: #222;
-      border-radius: 4px;
-      border: 1px solid #444;
-    }
-    .timeline-title {
-      font-size: 11px;
-      color: #888;
-      margin-bottom: 6px;
-    }
-    #timeline-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .timeline-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .timeline-layer-label {
-      font-size: 10px;
-      min-width: 80px;
-      color: #aaa;
-    }
-    .timeline-cells {
-      display: flex;
-      gap: 2px;
-    }
-    .timeline-cell {
-      width: 28px;
-      height: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 10px;
-      background: #333;
-      color: #888;
-      border-radius: 2px;
-      cursor: pointer;
-      border: 1px solid transparent;
-    }
-    .timeline-cell.base {
-      cursor: default;
-      background: #2a2a2a;
-      color: #666;
-    }
-    .timeline-cell.overlay {
-      cursor: pointer;
-    }
-    .timeline-cell.overlay.has-block {
-      background: #3a7bd5;
-      color: white;
-      border-color: #4a8be5;
-    }
-    .timeline-cell.overlay:hover {
-      background: #444;
-    }
-    .spritesheet-tester-bar {
-      position: absolute;
-      top: 54px;
-      left: 0;
-      right: 0;
-      padding: 8px 12px;
-      background: rgba(0,0,0,0.6);
+    button:hover { background: #4a8be5; }
+    button.secondary { background: #444; }
+
+    .section-1-controls, .section-2-controls {
       display: flex;
       flex-wrap: wrap;
       gap: 12px;
       align-items: center;
-      z-index: 9;
-      border-bottom: 1px solid #333;
+      margin-bottom: 6px;
     }
-    .spritesheet-tester-bar label.spritesheet-layer-toggle {
+    .anim-strip-wrapper {
       display: flex;
+      overflow-x: auto;
+      gap: 4px;
+      padding: 4px 0;
+      height: 90px;
       align-items: center;
-      gap: 6px;
-      cursor: pointer;
-      font-size: 12px;
-      color: #aaa;
     }
+    .anim-strip-wrapper::-webkit-scrollbar { height: 8px; }
+    .anim-strip-wrapper::-webkit-scrollbar-track { background: #222; }
+    .anim-strip-wrapper::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+
+    .configure-timeline { margin-top: 8px; padding: 8px; background: #222; border-radius: 4px; border: 1px solid #444; }
+    .timeline-title { font-size: 11px; color: #888; margin-bottom: 6px; }
+    #timeline-grid { display: flex; flex-direction: column; gap: 4px; }
+    .timeline-row { display: flex; align-items: center; gap: 6px; }
+    .timeline-layer-label { font-size: 10px; min-width: 80px; color: #aaa; }
+    .timeline-cells { display: flex; gap: 2px; }
+    .timeline-cell {
+      width: 28px; height: 24px; display: flex; align-items: center; justify-content: center;
+      font-size: 10px; background: #333; color: #888; border-radius: 2px;
+      cursor: pointer; border: 1px solid transparent;
+    }
+    .timeline-cell.base { cursor: default; background: #2a2a2a; color: #666; }
+    .timeline-cell.overlay { cursor: pointer; }
+    .timeline-cell.overlay.has-block { background: #3a7bd5; color: white; border-color: #4a8be5; }
+    .timeline-cell.overlay:hover { background: #444; }
+
+    #game-container {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 0;
+    }
+    #game-container canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+    .section { position: relative; z-index: 1; pointer-events: none; }
+    .section > * { pointer-events: auto; }
+    .canvas-host { pointer-events: none; }
   </style>
 </head>
 <body>
-  <div id="ui">
-    <div class="tab-bar">
-      <button id="tab-sprite" class="active">Sprite Viewer</button>
-      <button id="tab-units">Units</button>
-      <button id="tab-effects">Effects</button>
-      <button id="tab-configure">Configure</button>
-      <button id="tab-spritesheet">Spritesheet Tester</button>
-    </div>
-    <div id="sprite-viewer-ui" class="tab-content active">
-      <label>
-        Sprite:
-        <select id="sprite-select">
-          <option value="">-- Select sprite --</option>
-        </select>
-      </label>
-      <label>
-        Direction / Anim:
-        <select id="dir-select">
-          <option value="all">All frames</option>
-        </select>
-      </label>
-      <label>
-        <input type="range" id="speed" min="1" max="60" value="15" />
-        Speed
-      </label>
+  <div id="section-1" class="section section-1">
+    <div class="section-header">Sprite Viewer</div>
+    <div class="section-1-controls">
+      <label>Sprite: <select id="sprite-select"><option value="">-- Select sprite --</option></select></label>
+      <label>Preset: <select id="preset-select"><option value="">Custom</option></select></label>
+      <label>Frame start: <input type="number" id="frame-start" min="0" value="0" /></label>
+      <label>Frame end: <input type="number" id="frame-end" min="0" value="0" /></label>
+      <label><input type="range" id="speed" min="1" max="60" value="15" /> Speed</label>
       <button id="play-btn">Play</button>
       <button id="step-btn" class="secondary">Step</button>
-      <span id="frame-info"></span>
+      <span id="frame-info" style="font-size: 11px; color: #888;"></span>
     </div>
-    <div id="units-ui" class="tab-content">
-      <label>
-        Unit:
-        <select id="unit-select">
-          <option value="">-- Select unit --</option>
-        </select>
-      </label>
-      <span id="units-status">Units — 25 animations at 8 FPS (shared frame layout)</span>
+    <div id="section-1-canvas" class="canvas-host" style="height: 65px; border-radius: 4px;"></div>
+  </div>
+
+  <div id="section-2" class="section section-2">
+    <div class="section-header">Animations</div>
+    <div class="section-2-controls">
+      <label>Unit: <select id="anim-unit-select"><option value="">-- Select unit --</option></select></label>
+      <label id="anim-custom-sprite-label" style="display: none;">Sprite: <select id="anim-custom-sprite"></select></label>
+      <label id="anim-custom-start-label" style="display: none;">Start: <input type="number" id="anim-custom-start" min="0" value="0" /></label>
+      <label id="anim-custom-end-label" style="display: none;">End: <input type="number" id="anim-custom-end" min="0" value="0" /></label>
+      <button id="anim-custom-load-btn" class="secondary" style="display: none;">Load</button>
+      <button id="anim-export-btn" class="secondary" disabled>Export</button>
+      <button id="anim-export-all-btn" class="secondary" disabled>Export All</button>
+      <button id="anim-test-btn" class="secondary" disabled>Test</button>
+      <button id="anim-test-all-btn" class="secondary" disabled>Test All</button>
+      <span id="anim-status" style="font-size: 11px; color: #888;">Select unit to view 25 animations</span>
     </div>
-    <div id="effects-ui" class="tab-content">
-      <span id="effects-status">Effects — 59 animations at 8 FPS (Extras)</span>
-    </div>
-    <div id="configure-ui" class="tab-content">
-      <label>
-        Animation to edit:
-        <select id="configure-composition-select">
-          <option value="">-- Select animation --</option>
-        </select>
-      </label>
-      <label id="configure-id-label" style="display: none;">
-        Composition ID: <span id="configure-id-display"></span>
-      </label>
-      <label id="configure-id-input-label" style="display: none;">
-        Composition ID:
-        <input type="text" id="composition-id" placeholder="e.g. SWAT/attack north" style="width: 180px; padding: 4px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 4px;" />
-      </label>
-      <div class="configure-slots">
-        <label>
-          Slot 1:
-          <select id="configure-slot-1">
-            <option value="">-- None --</option>
-          </select>
-          Layer:
-          <select id="configure-layer-1">
-            <option value="0">0 (back)</option>
-            <option value="1">1</option>
-            <option value="2">2 (front)</option>
-          </select>
-          Scale:
-          <input type="range" id="configure-scale-1" min="0.05" max="2" step="0.05" value="0.5" style="width: 80px;" title="Size" />
-          <span id="configure-scale-val-1" style="font-size: 11px; min-width: 32px;">0.5</span>
-          FPS:
-          <input type="number" id="configure-fps-1" min="1" max="60" value="8" style="width: 48px; padding: 2px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 4px;" />
-        </label>
-        <label>
-          Slot 2:
-          <select id="configure-slot-2">
-            <option value="">-- None --</option>
-          </select>
-          Layer:
-          <select id="configure-layer-2">
-            <option value="0">0 (back)</option>
-            <option value="1" selected>1</option>
-            <option value="2">2 (front)</option>
-          </select>
-          Scale:
-          <input type="range" id="configure-scale-2" min="0.05" max="2" step="0.05" value="0.2" style="width: 80px;" />
-          <span id="configure-scale-val-2" style="font-size: 11px; min-width: 32px;">0.2</span>
-          FPS:
-          <input type="number" id="configure-fps-2" min="1" max="60" value="8" style="width: 48px; padding: 2px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 4px;" />
-        </label>
-        <label>
-          Slot 3:
-          <select id="configure-slot-3">
-            <option value="">-- None --</option>
-          </select>
-          Layer:
-          <select id="configure-layer-3">
-            <option value="0">0 (back)</option>
-            <option value="1">1</option>
-            <option value="2" selected>2 (front)</option>
-          </select>
-          Scale:
-          <input type="range" id="configure-scale-3" min="0.05" max="2" step="0.05" value="0.2" style="width: 80px;" />
-          <span id="configure-scale-val-3" style="font-size: 11px; min-width: 32px;">0.2</span>
-          FPS:
-          <input type="number" id="configure-fps-3" min="1" max="60" value="8" style="width: 48px; padding: 2px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 4px;" />
-        </label>
+    <div id="section-2-viewport" style="position: relative; height: 90px;">
+      <div id="section-2-canvas" class="canvas-host" style="height: 90px; border-radius: 4px;"></div>
+      <div id="section-2-scrollbar" style="position: absolute; bottom: 0; left: 0; right: 0; height: 10px; overflow-x: auto; overflow-y: hidden; background: #222; border-radius: 0 0 4px 4px;">
+        <div id="section-2-scroll-track" style="width: 2400px; height: 1px;"></div>
       </div>
-      <label>
-        Move layer:
-        <select id="configure-move-slot">
-          <option value="1">Slot 1</option>
-          <option value="2">Slot 2</option>
-          <option value="3">Slot 3</option>
-        </select>
-      </label>
-      <span style="font-size: 11px; color: #888;">(arrow keys)</span>
+    </div>
+  </div>
+
+  <div id="section-3" class="section section-3">
+    <div class="section-header">Configure — combine sprites</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 8px;">
+      <label>Animation: <select id="configure-composition-select"><option value="">-- Select --</option></select></label>
+      <label id="configure-id-label" style="display: none;">ID: <span id="configure-id-display"></span></label>
+      <label id="configure-id-input-label" style="display: none;">ID: <input type="text" id="composition-id" placeholder="e.g. SWAT/attack north" style="width: 160px; padding: 4px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #444; border-radius: 4px;" /></label>
+      <label>Move: <select id="configure-move-slot"><option value="1">Slot 1</option><option value="2">Slot 2</option><option value="3">Slot 3</option></select></label>
+      <button id="configure-zoom-in" class="secondary">+</button>
+      <button id="configure-zoom-out" class="secondary">-</button>
+      <span id="configure-zoom-level" style="font-size: 11px; color: #888;">100%</span>
       <button id="configure-play-btn">Play</button>
       <button id="configure-step-btn" class="secondary">Step</button>
-      <button id="configure-save-btn">Save</button>
-      <button id="configure-export-btn">Export Spritesheet</button>
-      <span id="configure-status">Configure — select animations, drag or use arrow keys to move, save</span>
-      <div id="configure-timeline" class="configure-timeline">
-        <div class="timeline-title">Timeline — click cells to place overlay on base frames</div>
-        <div id="timeline-grid"></div>
-      </div>
+      <button id="configure-save-btn" class="secondary">Save</button>
+      <button id="configure-export-btn">Export</button>
+      <button id="configure-test-btn" class="secondary">Test</button>
+      <span id="configure-status" style="font-size: 11px; color: #888;">Select animations, drag to position</span>
     </div>
-    <div id="spritesheet-tester-ui" class="tab-content"></div>
+    <div class="configure-slots" style="display: flex; flex-direction: column; gap: 6px;">
+      <label>Slot 1: <select id="configure-slot-1"><option value="">-- None --</option></select> Layer: <select id="configure-layer-1"><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option></select> Scale: <input type="range" id="configure-scale-1" min="0.05" max="2" step="0.05" value="0.5" style="width: 70px;" /><span id="configure-scale-val-1">0.5</span> FPS: <input type="number" id="configure-fps-1" min="1" max="60" value="8" style="width: 40px;" /></label>
+      <label>Slot 2: <select id="configure-slot-2"><option value="">-- None --</option></select> Layer: <select id="configure-layer-2"><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option></select> Scale: <input type="range" id="configure-scale-2" min="0.05" max="2" step="0.05" value="0.2" style="width: 70px;" /><span id="configure-scale-val-2">0.2</span> FPS: <input type="number" id="configure-fps-2" min="1" max="60" value="8" style="width: 40px;" /></label>
+      <label>Slot 3: <select id="configure-slot-3"><option value="">-- None --</option></select> Layer: <select id="configure-layer-3"><option value="0">0</option><option value="1">1</option><option value="2" selected>2</option></select> Scale: <input type="range" id="configure-scale-3" min="0.05" max="2" step="0.05" value="0.2" style="width: 70px;" /><span id="configure-scale-val-3">0.2</span> FPS: <input type="number" id="configure-fps-3" min="1" max="60" value="8" style="width: 40px;" /></label>
+    </div>
+    <div id="section-3-canvas" class="canvas-host" style="height: 140px; border-radius: 4px; margin-bottom: 8px;"></div>
+    <div id="configure-timeline" class="configure-timeline" style="margin-top: 8px;"><div class="timeline-title">Timeline</div><div id="timeline-grid"></div></div>
   </div>
-  <div id="spritesheet-tester-bar" class="spritesheet-tester-bar" style="display: none;">
-    <label>
-      Spritesheet:
-      <select id="spritesheet-tester-select">
-        <option value="">-- Select spritesheet --</option>
-      </select>
-    </label>
-    <label class="spritesheet-layer-toggle"><input type="checkbox" id="spritesheet-layer0-toggle" checked /> Layer 0</label>
-    <label class="spritesheet-layer-toggle"><input type="checkbox" id="spritesheet-layer1-toggle" checked /> Layer 1</label>
-    <span id="spritesheet-tester-status">Select a spritesheet from the dropdown to test on the map</span>
+
+  <div id="section-4" class="section section-4">
+    <div class="section-header">Spritesheet Tester</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 6px;">
+      <label>FPS: <input type="number" id="tester-fps" min="1" max="60" value="8" style="width: 48px;" /></label>
+      <button id="tester-zoom-in" class="secondary">+</button>
+      <button id="tester-zoom-out" class="secondary">-</button>
+      <span id="tester-zoom-level" style="font-size: 11px; color: #888;">100%</span>
+      <span id="tester-status" style="font-size: 11px; color: #888;">Use Test from above to load animation</span>
+    </div>
+    <div id="section-4-canvas" class="canvas-host" style="flex: 1; min-height: 150px; border-radius: 4px;"></div>
   </div>
-  <div id="canvas-wrapper"></div>
+
+  <div id="game-container"></div>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

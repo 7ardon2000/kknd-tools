@@ -4,6 +4,19 @@ A set of **modding tools** for **KKnD** (Krush Kill 'n Destroy) — built by fan
 
 > **Disclaimer:** These tools are intended for **enthusiastic fans** who want more freedom to create personal mods — for testing, experimentation, and fun. **Single-player and offline use only.** Not for multiplayer, competitive, or commercial use.
 
+---
+
+## ⚠️ WORK IN PROGRESS — Known Issues
+
+**This project is actively in development.** Expect bugs and rough edges:
+
+- **Frame sizing**: Exported spritesheet frame sizes can be incorrect for larger units (e.g. DireWolf) or when metadata `w`/`h` is missing. Run `python scripts/backfill_frames_metadata.py` after extraction to improve accuracy.
+- **Export artifacts**: Some sprites may show visual artifacts (e.g. stray pixels) when exporting. Per-cell clipping helps but edge cases remain.
+- **Shoot effect composition**: SWAT attack + muzzle flash composition is tuned for specific units; other units may need manual adjustment.
+- **UI/UX**: The viewer layout and controls are still being refined.
+
+Use at your own risk. Report issues on [GitHub Issues](https://github.com/TajRizek/kknd-tools/issues).
+
 ## What You Get
 
 - **MOBD/LVL extractor** — Converts sprite data from `SPRITES.LVL` to PNG frames with metadata
@@ -67,7 +80,43 @@ See [documentation.md](documentation.md) for full details.
 npm start
 ```
 
-Pick a sprite, filter by direction/anim, and play. Per-frame hotspot (ox, oy) is applied for correct placement.
+Open http://localhost:5173. The viewer uses a **unified four-section layout** — all sections are visible at once (no tabs).
+
+### Section 1 — Sprite Viewer (top)
+
+- **Sprite**: Choose any unit or effect from the dropdown.
+- **Preset**: Quick presets like "stand north", "attack east", or "Custom" for manual frame range.
+- **Frame start / end**: Define which frames to display.
+- **Speed**: Playback rate (frames per second).
+- **Play** / **Step**: Control animation playback.
+
+Use this to inspect a single sprite or browse a frame range.
+
+### Section 2 — Animations
+
+- **Unit**: Select an infantry unit (ElPresidente, SWAT, etc.) or **Effects (Extras)**. Use **Custom...** to pick any sprite and set a frame range manually.
+- **Horizontal strip**: Shows all 25 unit animations or 59 effect animations in one scrollable row. Each cell plays at 8 FPS. Click to select.
+- **Export** / **Export All**: Download spritesheet PNGs (base animations only — no shoot-effect overlay).
+- **Test** / **Test All**: Send the generated spritesheet to Section 4 (Spritesheet Tester).
+
+### Section 3 — Configure (combine sprites)
+
+Compose up to 3 layers (e.g. unit + muzzle flash):
+
+- **Animation**: Pick a SWAT attack (or "New composition...") to edit.
+- **Slots 1–3**: Each slot = one animation (unit, effect, etc.). Set layer order, scale, and FPS.
+- **Timeline**: Click cells to decide when overlays appear (e.g. muzzle flash only on frame 2).
+- **Drag**: Move sprites on the canvas; use Move dropdown + arrow keys for fine control.
+- **Save**: Updates compositions and downloads `animation-compositions.json`.
+- **Export** / **Test**: Render the composed spritesheet or send it to Section 4.
+
+### Section 4 — Spritesheet Tester
+
+- Receives spritesheets from **Test** in Sections 2 or 3.
+- Plays the animation over a map background.
+- **FPS**: Adjust playback speed.
+- **Zoom**: Mouse scroll to zoom in/out.
+- **Drag**: Reposition the sprite on the map.
 
 After extraction, regenerate the sprite list:
 

@@ -208,10 +208,46 @@ def parse_mobd_render_flags(data, offset, default_palette):
         return None, palette
 
 
+def parse_mobd_point_list(data, offset):
+    """
+    Parse the point list at offset. Returns list of {'type': int, 'x': int, 'y': int}.
+    Tries: (1) count uint16 + (type uint8, x int16, y int16) per point - 5 bytes;
+           (2) count uint16 + (x int16, y int16) per point - 4 bytes;
+           (3) count uint16 + (x int32, y int32) per point - 8 bytes.
+    Skips points with |x|>2048 or |y|>2048 (likely parse errors).
+    """
+    points = []
+    if offset == 0 or offset >= len(data):
+        return points
+    pos = offset
+    if pos + 2 > len(data):
+        return points
+    count, = struct.unpack_from('<H', data, pos)
+    pos += 2
+    if count == 0 or count > 64:
+        return points
+    for stride, fmt in [(5, '<Bhh'), (4, '<hh'), (8, '<ii')]:
+        if pos + count * stride > len(data):
+            continue
+        pts = []
+        for _ in range(count):
+            if fmt == '<Bhh':
+                ptype, x, y = struct.unpack_from(fmt, data, pos)
+            else:
+                ptype, x, y = 0, *struct.unpack_from(fmt, data, pos)
+            pos += stride
+            if -2048 <= x <= 2048 and -2048 <= y <= 2048:
+                pts.append({'type': ptype, 'x': x, 'y': y})
+        if pts:
+            return pts
+        pos = offset + 2
+    return points
+
+
 def parse_mobd_frame(data, offset, default_palette):
-    """Parse MobdFrame at offset. Returns (ox, oy, img, palette) or (0, 0, None, None)."""
+    """Parse MobdFrame at offset. Returns (ox, oy, img, palette, points) or (0, 0, None, None, [])."""
     if offset + 28 > len(data):
-        return 0, 0, None, None
+        return 0, 0, None, None, []
     pos = offset
     ox, oy = struct.unpack_from('<II', data, pos)
     pos += 8
@@ -221,9 +257,10 @@ def parse_mobd_frame(data, offset, default_palette):
     pos += 8   # boxListOffset, unk
     point_list_off, = struct.unpack_from('<I', data, pos)
     if render_flags_off < 0 or render_flags_off >= len(data):
-        return ox, oy, None, None
+        return ox, oy, None, None, []
     img, pal = parse_mobd_render_flags(data, render_flags_off, default_palette)
-    return ox, oy, img, pal
+    points = parse_mobd_point_list(data, point_list_off)
+    return ox, oy, img, pal, points
 
 
 def _missing_frame_workaround(pos):
@@ -251,16 +288,16 @@ def parse_mobd_animation(data, offset, default_palette):
             break
         if value < 0 or value >= len(data):
             continue
-        ox, oy, img, pal = parse_mobd_frame(data, value, default_palette)
+        ox, oy, img, pal, points = parse_mobd_frame(data, value, default_palette)
         if img and img.width > 0 and img.height > 0 and img.width < 2048 and img.height < 2048:
-            yield ox, oy, img, pal
+            yield ox, oy, img, pal, points
             if missing > 0:
                 missing -= 1
-                yield ox, oy, img, pal
+                yield ox, oy, img, pal, points
 
 
 def parse_mobd(data, mobd_start, mobd_end, default_palette=None):
-    """Parse MOBD structure. Yields (anim_type, anim_idx, frame_idx, global_idx, ox, oy, img, pal)."""
+    """Parse MOBD structure. Yields (anim_type, anim_idx, frame_idx, global_idx, ox, oy, img, pal, points)."""
     file_start = mobd_start
     first_frame_start = mobd_end
     animation_offsets = []
@@ -295,8 +332,8 @@ def parse_mobd(data, mobd_start, mobd_end, default_palette=None):
             continue
         if value in remaining:
             remaining.remove(value)
-            for frame_idx, (ox, oy, img, pal) in enumerate(parse_mobd_animation(data, value, default_palette)):
-                yield "rotational", rotational_idx, frame_idx, global_idx, ox, oy, img, pal
+            for frame_idx, (ox, oy, img, pal, points) in enumerate(parse_mobd_animation(data, value, default_palette)):
+                yield "rotational", rotational_idx, frame_idx, global_idx, ox, oy, img, pal, points
                 global_idx += 1
             rotational_idx += 1
 
@@ -305,8 +342,8 @@ def parse_mobd(data, mobd_start, mobd_end, default_palette=None):
     for anim_off in remaining:
         if anim_off + 8 > len(data):
             continue
-        for frame_idx, (ox, oy, img, pal) in enumerate(parse_mobd_animation(data, anim_off, default_palette)):
-            yield "simple", simple_idx, frame_idx, global_idx, ox, oy, img, pal
+        for frame_idx, (ox, oy, img, pal, points) in enumerate(parse_mobd_animation(data, anim_off, default_palette)):
+            yield "simple", simple_idx, frame_idx, global_idx, ox, oy, img, pal, points
             global_idx += 1
         simple_idx += 1
 
@@ -412,7 +449,7 @@ def parse_lvl(lvl_path, lookup_yaml_path=None):
     return index, data  # data is content after DATA header (offset 0 = start of content)
 
 
-def extract_mobd_to_png(lvl_data, offset, size, output_dir, palette, name):
+def extract_mobd_to_png(lvl_data, offset, size, output_dir, palette, name, metadata_only=False):
     """Extract raw MOBD binary, convert frames to PNGs, and write frame metadata JSON."""
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
@@ -426,7 +463,7 @@ def extract_mobd_to_png(lvl_data, offset, size, output_dir, palette, name):
     rotational_count = 0
     simple_count = 0
     try:
-        for anim_type, anim_idx, frame_idx, global_idx, ox, oy, img, pal in parse_mobd(
+        for anim_type, anim_idx, frame_idx, global_idx, ox, oy, img, pal, points in parse_mobd(
             lvl_data, offset, offset + size, palette
         ):
             if anim_type == "rotational":
@@ -434,17 +471,21 @@ def extract_mobd_to_png(lvl_data, offset, size, output_dir, palette, name):
             else:
                 simple_count = max(simple_count, anim_idx + 1)
             entry = {"i": global_idx, "anim": anim_type, "frame": frame_idx, "ox": ox, "oy": oy}
+            if img and img.width > 0 and img.height > 0:
+                entry["w"] = img.width
+                entry["h"] = img.height
+            if points:
+                entry["points"] = points
             if anim_type == "rotational":
                 entry["dir"] = anim_idx
             else:
                 entry["idx"] = anim_idx
             frames_meta.append(entry)
             pal_use = pal if pal else palette
-            if not pal_use or not img or img.width <= 0 or img.height <= 0:
-                continue
-            png_path = out_path / f"{base}_{global_idx:04d}.png"
-            if _image_to_png(img, pal_use, png_path):
-                png_count += 1
+            if not metadata_only and pal_use and img and img.width > 0 and img.height > 0:
+                png_path = out_path / f"{base}_{global_idx:04d}.png"
+                if _image_to_png(img, pal_use, png_path):
+                    png_count += 1
         json_path = out_path / f"{base}_frames.json"
         with open(json_path, 'w') as f:
             json.dump({
@@ -461,20 +502,26 @@ def extract_mobd_to_png(lvl_data, offset, size, output_dir, palette, name):
 
 def main():
     import os
+    import argparse
     base = Path(__file__).parent
     content_dir = Path(os.environ.get('KKND_CONTENT', str(base / 'content')))
     sprites_lvl = content_dir / 'sprites.lvl'
     lookup_path = content_dir / 'sprites.lvl.yaml'
     palette_path = content_dir / 'palette.png'
 
+    parser = argparse.ArgumentParser(description='Extract MOBD frames from KKnD sprites.lvl')
+    parser.add_argument('--metadata-only', action='store_true',
+                        help='Only extract frame metadata (with points) to JSON, skip PNG. Works without palette.')
+    args = parser.parse_args()
+
     if not sprites_lvl.exists():
         print("sprites.lvl not found in content/. Run extract-assets.ps1 first to copy game content from KKnD Xtreme.")
         sys.exit(1)
-    if not palette_path.exists():
+    if not args.metadata_only and not palette_path.exists():
         print(f"palette.png not found in content/. Gen1 sprites require a 256-color palette. Place palette.png in {content_dir}")
         sys.exit(1)
 
-    palette = load_palette(palette_path)
+    palette = load_palette(palette_path) if palette_path.exists() else [(0, 0, 0)] * 256
     index, lvl_data = parse_lvl(sprites_lvl, lookup_path)
     mobd_entries = [k for k in index if k.endswith('.mobd')]
     print(f"Found {len(mobd_entries)} MOBD entries in LVL")
@@ -498,7 +545,7 @@ def main():
         else:
             out_sub = output_base / 'units' / stem_lower
         try:
-            n = extract_mobd_to_png(lvl_data, offset, size, out_sub, palette, mobd_name)
+            n = extract_mobd_to_png(lvl_data, offset, size, out_sub, palette, mobd_name, metadata_only=args.metadata_only)
             if n > 0:
                 print(f"Extracted {mobd_name}")
         except Exception as e:
