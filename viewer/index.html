@@ -75,9 +75,99 @@
       justify-content: center;
       background: #111;
     }
+    #canvas-wrapper.with-spritesheet-bar {
+      top: 132px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #111;
+    }
     canvas {
       display: block;
       background: #222;
+    }
+    .configure-timeline {
+      width: 100%;
+      margin-top: 8px;
+      padding: 8px;
+      background: #222;
+      border-radius: 4px;
+      border: 1px solid #444;
+    }
+    .timeline-title {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 6px;
+    }
+    #timeline-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .timeline-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .timeline-layer-label {
+      font-size: 10px;
+      min-width: 80px;
+      color: #aaa;
+    }
+    .timeline-cells {
+      display: flex;
+      gap: 2px;
+    }
+    .timeline-cell {
+      width: 28px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      background: #333;
+      color: #888;
+      border-radius: 2px;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+    .timeline-cell.base {
+      cursor: default;
+      background: #2a2a2a;
+      color: #666;
+    }
+    .timeline-cell.overlay {
+      cursor: pointer;
+    }
+    .timeline-cell.overlay.has-block {
+      background: #3a7bd5;
+      color: white;
+      border-color: #4a8be5;
+    }
+    .timeline-cell.overlay:hover {
+      background: #444;
+    }
+    .spritesheet-tester-bar {
+      position: absolute;
+      top: 54px;
+      left: 0;
+      right: 0;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      z-index: 9;
+      border-bottom: 1px solid #333;
+    }
+    .spritesheet-tester-bar label.spritesheet-layer-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #aaa;
     }
   </style>
 </head>
@@ -88,6 +178,7 @@
       <button id="tab-units">Units</button>
       <button id="tab-effects">Effects</button>
       <button id="tab-configure">Configure</button>
+      <button id="tab-spritesheet">Spritesheet Tester</button>
     </div>
     <div id="sprite-viewer-ui" class="tab-content active">
       <label>
@@ -201,8 +292,25 @@
       <button id="configure-play-btn">Play</button>
       <button id="configure-step-btn" class="secondary">Step</button>
       <button id="configure-save-btn">Save</button>
+      <button id="configure-export-btn">Export Spritesheet</button>
       <span id="configure-status">Configure — select animations, drag or use arrow keys to move, save</span>
+      <div id="configure-timeline" class="configure-timeline">
+        <div class="timeline-title">Timeline — click cells to place overlay on base frames</div>
+        <div id="timeline-grid"></div>
+      </div>
     </div>
+    <div id="spritesheet-tester-ui" class="tab-content"></div>
+  </div>
+  <div id="spritesheet-tester-bar" class="spritesheet-tester-bar" style="display: none;">
+    <label>
+      Spritesheet:
+      <select id="spritesheet-tester-select">
+        <option value="">-- Select spritesheet --</option>
+      </select>
+    </label>
+    <label class="spritesheet-layer-toggle"><input type="checkbox" id="spritesheet-layer0-toggle" checked /> Layer 0</label>
+    <label class="spritesheet-layer-toggle"><input type="checkbox" id="spritesheet-layer1-toggle" checked /> Layer 1</label>
+    <span id="spritesheet-tester-status">Select a spritesheet from the dropdown to test on the map</span>
   </div>
   <div id="canvas-wrapper"></div>
   <script type="module" src="/src/main.js"></script>

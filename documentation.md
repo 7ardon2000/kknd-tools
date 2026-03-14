@@ -139,19 +139,21 @@ Open http://localhost:5173
 - **Sprite Viewer** – Load any sprite, filter by direction/animation, and play at configurable speed.
 - **Units** – Select an infantry-type unit from a dropdown to view its 25 animations in a 5×5 grid at 8 FPS. All units share the same frame layout (stand, move, attack in 8 directions plus stand south2) for comparison. For SWAT, shoot effects (shootNorth1, shootEast1, etc.) from Extras are overlaid in front of the rifle barrel during attack animations. Available units: ElPresidente, Flamer, Harry, Infantry, KingZog, Mech, Mekanik, Pyromaniac, Rioter, RocketInfantry, RocketLauncher, Saboteur, Sapper, Sniper, Swat, Technician, Vandal.
 - **Effects** – Displays 59 effect animations from Extras (effects/extras) in a grid at 8 FPS: shrapnel, dust, fire, explosions, acid, electricity, craters, laser, death, and shoot effects. Definitions in `viewer/src/effects-config.js`.
-- **Configure** – Compose up to 3 animations (from units and effects) on a draggable grid to define precise positioning. Select animations per slot, assign layers (0=back, 2=front), set scale (0.05×–2×) and FPS (1–60) per layer, drag sprites to set offsets, then Save to download `animation-compositions.json`. Place the file in `viewer/src/` so the Units tab uses it for SWAT attack + shoot effect overlays (replacing hardcoded offsets). Definitions in `viewer/src/configure-config.js`.
+- **Configure** – Compose up to 3 animations (from units and effects) on a draggable grid. Use the **Timeline** to place overlay layers on specific base frames, then **Export Spritesheet** to bake composited PNG spritesheets for game dev. Definitions in `viewer/src/configure-config.js`.
+- **Spritesheet Tester** – Test exported spritesheets on a two-layer map (base terrain + overlay). Load a spritesheet PNG (and optional JSON config) via the Load button; the animation plays at the center of the map. Mouse scroll to zoom.
 
-### Configure tab (animation composition)
+### Configure tab (animation composition and spritesheet export)
 
-Use the Configure tab to fix incorrect shoot effect positioning (e.g. SWAT attack + shoot animations):
+Use the Configure tab to fix shoot effect positioning and export pre-composited spritesheets:
 
-1. **Select animation to edit** from the dropdown: SWAT attack north, northeast, east, etc., or "New composition…". Choosing a SWAT attack loads its current composition into the slots.
+1. **Select animation to edit** from the dropdown: SWAT attack north, northeast, east, etc., or "New composition…".
 2. Configure layers, scale, and FPS per slot.
-3. Drag sprites or use arrow keys (Shift+arrow = 5 px) to position; mouse scroll to zoom.
+3. **Timeline** – Click cells in overlay rows to place blocks: "this overlay appears on this base frame". Example: click frame 2 in the shoot-effect row so the muzzle flash plays only on the 3rd attack frame.
+4. Drag sprites or use arrow keys (Shift+arrow = 5 px) to position; mouse scroll to zoom.
+5. **Save** – Updates compositions in memory and downloads `animation-compositions.json`.
+6. **Export Spritesheet** – Renders the composed animation to a single PNG spritesheet (horizontal strip) plus a JSON with frame definitions. Downloads to your browser's Downloads folder. Format is compatible with Unity, Godot, Phaser, etc.
 
-4. Click **Save** to update compositions in memory and download `animation-compositions.json`. Switch to Units tab to see updates. For "New composition…", enter a Composition ID first.
-
-The Units tab uses compositions from memory. Save writes to `viewer/src/animation-compositions.json` (via dev server), backs up the previous file to `animation-compositions.json.backup`, and stores in localStorage. Switch to Units tab to see updates immediately.
+**Using composited spritesheets in the Units tab:** Place the exported files in `units/{path}/composite/` (e.g. `units/swat/composite/`). Name them `{Stem}_{anim_name}.png` and `{Stem}_{anim_name}.json` (e.g. `SWAT_attack_north.png`). The Units tab will load and display composited spritesheets when available, bypassing the raw + overlay pipeline for accurate WYSIWYG output.
 
 ### Animation compositions file format
 
@@ -164,7 +166,7 @@ The Units tab uses compositions from memory. Save writes to `viewer/src/animatio
       "id": "SWAT/attack north",
       "layers": [
         { "source": "units/swat", "stem": "SWAT", "anim": "attack north", "layer": 0, "offsetX": 0, "offsetY": 0 },
-        { "source": "effects/extras", "stem": "Extras", "anim": "shootNorth1", "layer": 1, "offsetX": -1, "offsetY": -9 }
+        { "source": "effects/extras", "stem": "Extras", "anim": "shootNorth1", "layer": 1, "offsetX": -1, "offsetY": -9, "timelineBlocks": [{ "baseFrame": 2 }] }
       ]
     }
   ]
@@ -172,7 +174,8 @@ The Units tab uses compositions from memory. Save writes to `viewer/src/animatio
 ```
 
 - **id**: Matches `{unitStem}/{animName}` for the Units tab (e.g. `SWAT/attack north`).
-- **layers**: Ordered by `layer`; base unit at 0, overlays (e.g. shoot effects) at 1, 2. Each layer has `source`, `stem`, `anim`, `layer`, `offsetX`, `offsetY`, `scale` (optional, default from type), `fps` (optional, default 8).
+- **layers**: Ordered by `layer`; base unit at 0, overlays at 1, 2. Each layer has `source`, `stem`, `anim`, `layer`, `offsetX`, `offsetY`, `scale` (optional), `fps` (optional), and **timelineBlocks** (optional).
+- **timelineBlocks**: Array of `{ baseFrame }` — overlay appears only on those base frames. When an overlay has 2 frames and `baseFrame: 2`, both effect frames play during base frame 2 (output expands to 5 frames for a 4-frame attack).
 
 ### Viewer controls (Sprite Viewer tab)
 
@@ -204,11 +207,15 @@ This writes `viewer/src/sprites.json` and must be run from the project root.
 kknd-assets/
 ├── units/
 │   ├── direwolf/          # DireWolf.mobd, DireWolf_0000.png..0247.png, DireWolf_frames.json
+│   ├── swat/
+│   │   ├── composite/     # Optional: composited spritesheets from Configure Export (e.g. SWAT_attack_north.png + .json)
 │   ├── beetle/
 │   ├── evolved/           # Mutants – sidebar, vehicles/, infantry/, buildings/
 │   ├── survivors/
 │   ├── bunker/
 │   └── ...
+├── maps/                  # map_layer0.png, map_layer1.png for Spritesheet Tester tab
+├── spritesheets-test/     # Test spritesheet PNGs + spritesheets.json manifest for dropdown
 ├── effects/
 │   ├── extras/            # Explosions, projectiles
 │   ├── flame/
@@ -288,8 +295,44 @@ After extraction, game content is copied to:
 
 ---
 
+### Spritesheet Tester tab
+
+Test spritesheets exported from the Configure tab on a map background:
+
+1. Switch to the **Spritesheet Tester** tab. A second bar appears below the tab bar with a Spritesheet dropdown and map layer controls.
+2. The map layers (from `maps/map_layer0.png` and `maps/map_layer1.png`) load automatically.
+3. Use **Layer 0** and **Layer 1** checkboxes to toggle map layer visibility (uncheck Layer 1 to see the base terrain only).
+4. Select a spritesheet from the **Spritesheet** dropdown. Spritesheets are loaded from `spritesheets-test/`; add PNGs there and register them in `spritesheets.json` (see format below).
+5. The animation plays at the center of the map at 8 FPS.
+6. Use mouse scroll to zoom in and out.
+
+**Adding test spritesheets:** Place PNG files in `spritesheets-test/` and add entries to `spritesheets-test/spritesheets.json`:
+
+```json
+[
+  { "id": "swat_attack_east", "label": "SWAT Attack East", "png": "SWAT_attack_east.png", "frameWidth": 16, "frameHeight": 13, "frameCount": 5 }
+]
+```
+
+Frame dimensions must divide the image evenly (e.g. 80×13 with 5 frames → frameWidth 16, frameHeight 13).
+
+Place `map_layer0.png` (base terrain) and `map_layer1.png` (scattered objects overlay) in `maps/` for the map to display. Layer 1 is processed on load: black/dark pixels (RGB ≤ 30) are made transparent so the overlay complements layer 0 instead of hiding it. Spritesheet sprites use depth 100 so they render above the map layers (0 and 1).
+
 ## Changelog
 
+- **2026-03-13**: Spritesheet Tester tab
+  - New tab to test exported spritesheets on a two-layer map background
+  - Second bar below tab bar (visible only when Spritesheet Tester is active) with Spritesheet dropdown
+  - **Dropdown selection**: Spritesheets loaded from `spritesheets-test/` folder via manifest (`spritesheets.json`); avoids file browse issues
+  - **Layer 0 / Layer 1** checkboxes to toggle map layer visibility
+  - **Layer 1 transparency**: Black/dark pixels (RGB ≤ 30) in map_layer1.png are made transparent so the overlay complements layer 0 instead of hiding it
+  - Load via Phaser Loader from server URL; sprite depth 100 so it renders above map layers
+  - Mouse scroll zoom (0.5×–3×)
+- **2026-03-13**: Configure tab – Timeline and spritesheet export
+  - **Timeline UI**: Multi-row timeline grid below the Configure canvas. Rows = layers (0=back, 1=middle, 2=front); columns = base frames. Click overlay cells to place blocks: overlay appears only on those base frames (e.g. shoot effect on frame 2 only).
+  - **Export Spritesheet**: Button exports the composed animation as a PNG spritesheet (horizontal strip) + JSON frame definitions. Downloads to browser. Format compatible with Unity, Godot, Phaser.
+  - **Units tab**: When composited spritesheets exist at `units/{path}/composite/{Name}.png` and `.json`, the Units tab loads and displays them instead of raw + overlay. Enables WYSIWYG accuracy.
+  - `timelineBlocks` per layer in composition schema (optional, backward compatible).
 - **2026-03-13**: Configure tab
   - Composition-first workflow: select animation to edit (SWAT attack north, etc.) from dropdown; loads into slots
   - Save updates in-memory compositions; switch to Units tab to see updates without reload

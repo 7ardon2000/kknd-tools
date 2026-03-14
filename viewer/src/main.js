@@ -23,6 +23,7 @@ class ViewerScene extends Phaser.Scene {
     this.unitGridMeta = null;
     this.unitGridStem = null;
     this.unitGridLoadInProgress = false;
+    this.unitGridComposites = {};
 
     this.effectsGridSprites = [];
     this.effectsGridMeta = null;
@@ -42,6 +43,16 @@ class ViewerScene extends Phaser.Scene {
     this.configurePlaying = false;
     this.configureLastAdvance = 0;
     this.configureLoadInProgress = false;
+    this.configureOutputFrameIndex = 0;
+    this.configureOutputFrameList = [];
+
+    this.spritesheetTesterZoom = 1;
+    this.spritesheetTesterMapLoaded = false;
+    this.spritesheetTesterSprite = null;
+    this.spritesheetTesterFrameIndex = 0;
+    this.spritesheetTesterLastAdvance = 0;
+    this.spritesheetTesterConfig = null;
+    this.spritesheetTesterMapSprites = [];
 
     await this.loadCompositions();
     this.setupUI();
@@ -49,6 +60,7 @@ class ViewerScene extends Phaser.Scene {
     this.setupTabs();
     this.setupUnitsTab();
     this.setupConfigureTab();
+    this.setupSpritesheetTesterTab();
   }
 
   async loadCompositions() {
@@ -102,15 +114,18 @@ class ViewerScene extends Phaser.Scene {
     const tabUnits = document.getElementById('tab-units');
     const tabEffects = document.getElementById('tab-effects');
     const tabConfigure = document.getElementById('tab-configure');
+    const tabSpritesheet = document.getElementById('tab-spritesheet');
     const spriteUI = document.getElementById('sprite-viewer-ui');
     const unitsUI = document.getElementById('units-ui');
     const effectsUI = document.getElementById('effects-ui');
     const configureUI = document.getElementById('configure-ui');
+    const spritesheetUI = document.getElementById('spritesheet-tester-ui');
 
     tabSprite.addEventListener('click', () => this.switchTab('sprite'));
     tabUnits.addEventListener('click', () => this.switchTab('units'));
     tabEffects.addEventListener('click', () => this.switchTab('effects'));
     tabConfigure.addEventListener('click', () => this.switchTab('configure'));
+    tabSpritesheet.addEventListener('click', () => this.switchTab('spritesheet'));
   }
 
   setupUnitsTab() {
@@ -155,18 +170,27 @@ class ViewerScene extends Phaser.Scene {
     document.getElementById('configure-play-btn').addEventListener('click', () => this.toggleConfigurePlay());
     document.getElementById('configure-step-btn').addEventListener('click', () => this.stepConfigureFrame());
     document.getElementById('configure-save-btn').addEventListener('click', () => this.saveConfigureComposition());
+    document.getElementById('configure-export-btn').addEventListener('click', () => this.exportCompositionToSpritesheet());
 
     const canvas = this.game.canvas;
     canvas.addEventListener('wheel', (e) => {
-      if (this.activeTab !== 'configure') return;
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.15 : 0.15;
-      this.configureZoom = Math.max(0.5, Math.min(3, this.configureZoom + delta));
-      if (this.configureGridContainer) {
-        this.configureGridContainer.setScale(this.configureZoom);
+      if (this.activeTab === 'configure') {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.15 : 0.15;
+        this.configureZoom = Math.max(0.5, Math.min(3, this.configureZoom + delta));
+        if (this.configureGridContainer) {
+          this.configureGridContainer.setScale(this.configureZoom);
+        }
+        const statusEl = document.getElementById('configure-status');
+        if (statusEl) statusEl.textContent = `Zoom ${Math.round(this.configureZoom * 100)}% — drag sprites, then Save`;
+      } else if (this.activeTab === 'spritesheet') {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.15 : 0.15;
+        this.spritesheetTesterZoom = Math.max(0.5, Math.min(3, this.spritesheetTesterZoom + delta));
+        this.cameras.main.setZoom(this.spritesheetTesterZoom);
+        const statusEl = document.getElementById('spritesheet-tester-status');
+        if (statusEl) statusEl.textContent = `Zoom ${Math.round(this.spritesheetTesterZoom * 100)}% — scroll to zoom`;
       }
-      const statusEl = document.getElementById('configure-status');
-      if (statusEl) statusEl.textContent = `Zoom ${Math.round(this.configureZoom * 100)}% — drag sprites, then Save`;
     }, { passive: false });
 
     const moveSlotEl = document.getElementById('configure-move-slot');
@@ -228,6 +252,199 @@ class ViewerScene extends Phaser.Scene {
       const statusEl = document.getElementById('configure-status');
       if (statusEl) statusEl.textContent = `Slot ${this.configureMoveSlot}: (${slot.offsetX}, ${slot.offsetY}) — arrow keys or drag`;
     });
+  }
+
+  setupSpritesheetTesterTab() {
+    this.loadSpritesheetTesterManifest();
+    const sel = document.getElementById('spritesheet-tester-select');
+    if (sel) sel.addEventListener('change', () => this.onSpritesheetTesterSelect());
+    const layer0Toggle = document.getElementById('spritesheet-layer0-toggle');
+    const layer1Toggle = document.getElementById('spritesheet-layer1-toggle');
+    if (layer0Toggle) layer0Toggle.addEventListener('change', () => this.updateSpritesheetTesterLayerVisibility());
+    if (layer1Toggle) layer1Toggle.addEventListener('change', () => this.updateSpritesheetTesterLayerVisibility());
+  }
+
+  async loadSpritesheetTesterManifest() {
+    const sel = document.getElementById('spritesheet-tester-select');
+    if (!sel) return;
+    try {
+      const res = await fetch('/spritesheets-test/spritesheets.json');
+      if (!res.ok) throw new Error('Manifest not found');
+      const list = await res.json();
+      sel.innerHTML = '<option value="">-- Select spritesheet --</option>';
+      for (const item of list) {
+        const opt = document.createElement('option');
+        opt.value = JSON.stringify(item);
+        opt.textContent = item.label || item.png || item.id;
+        sel.appendChild(opt);
+      }
+    } catch {
+      sel.innerHTML = '<option value="">-- No spritesheets (add to spritesheets-test/) --</option>';
+    }
+  }
+
+  async loadSpritesheetTesterMap() {
+    if (this.spritesheetTesterMapLoaded) {
+      this.buildSpritesheetTesterMap();
+      this.restoreSpritesheetTesterSprite();
+      return;
+    }
+    this.load.image('map-layer0', '/maps/map_layer0.png');
+    this.load.image('map-layer1-raw', '/maps/map_layer1.png');
+    this.load.once('complete', () => {
+      this.processMapLayer1Transparency();
+      this.spritesheetTesterMapLoaded = true;
+      this.buildSpritesheetTesterMap();
+    });
+    this.load.once('loaderror', () => {
+      document.getElementById('spritesheet-tester-status').textContent = 'Map not found — add map_layer0.png and map_layer1.png to maps/';
+    });
+    this.load.start();
+  }
+
+  /** Makes black/dark pixels in layer 1 transparent so it overlays layer 0 correctly. */
+  processMapLayer1Transparency() {
+    if (!this.textures.exists('map-layer1-raw')) return;
+    const img = this.textures.get('map-layer1-raw').getSourceImage();
+    if (!img || !img.complete) return;
+    const w = img.width;
+    const h = img.height;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const data = ctx.getImageData(0, 0, w, h);
+    const BLACK_THRESHOLD = 30;
+    for (let i = 0; i < data.data.length; i += 4) {
+      const r = data.data[i];
+      const g = data.data[i + 1];
+      const b = data.data[i + 2];
+      if (r <= BLACK_THRESHOLD && g <= BLACK_THRESHOLD && b <= BLACK_THRESHOLD) {
+        data.data[i + 3] = 0;
+      }
+    }
+    ctx.putImageData(data, 0, 0);
+    this.textures.remove('map-layer1-raw');
+    this.textures.addCanvas('map-layer1', canvas);
+  }
+
+  buildSpritesheetTesterMap() {
+    this.destroySpritesheetTesterMap();
+    if (!this.textures.exists('map-layer0')) return;
+    const w = this.scale.width;
+    const h = this.scale.height;
+    const centerX = w / 2;
+    const centerY = h / 2;
+    const img0 = this.textures.get('map-layer0').getSourceImage();
+    const img1 = this.textures.exists('map-layer1') ? this.textures.get('map-layer1').getSourceImage() : null;
+    const scale0 = Math.min(w / (img0?.width || 1), h / (img0?.height || 1), 1);
+    const sprite0 = this.add.image(centerX, centerY, 'map-layer0').setDepth(0);
+    sprite0.setScale(scale0);
+    sprite0.setData('layerIndex', 0);
+    this.spritesheetTesterMapSprites.push(sprite0);
+    if (img1) {
+      const scale1 = Math.min(w / (img1.width || 1), h / (img1.height || 1), 1);
+      const sprite1 = this.add.image(centerX, centerY, 'map-layer1').setDepth(1);
+      sprite1.setScale(scale1);
+      sprite1.setData('layerIndex', 1);
+      this.spritesheetTesterMapSprites.push(sprite1);
+    }
+    this.updateSpritesheetTesterLayerVisibility();
+  }
+
+  updateSpritesheetTesterLayerVisibility() {
+    const showLayer0 = document.getElementById('spritesheet-layer0-toggle')?.checked !== false;
+    const showLayer1 = document.getElementById('spritesheet-layer1-toggle')?.checked !== false;
+    for (const s of this.spritesheetTesterMapSprites) {
+      const idx = s.getData?.('layerIndex') ?? -1;
+      if (idx === 0) s.setVisible(showLayer0);
+      else if (idx === 1) s.setVisible(showLayer1);
+    }
+  }
+
+  destroySpritesheetTesterMap() {
+    for (const s of this.spritesheetTesterMapSprites) {
+      s.destroy();
+    }
+    this.spritesheetTesterMapSprites = [];
+  }
+
+  hideSpritesheetTester() {
+    if (this.spritesheetTesterSprite) {
+      this.spritesheetTesterSprite.destroy();
+      this.spritesheetTesterSprite = null;
+    }
+    this.destroySpritesheetTesterMap();
+  }
+
+  restoreSpritesheetTesterSprite() {
+    if (!this.textures.exists('spritesheet-test') || !this.spritesheetTesterConfig) return;
+    const centerX = this.scale.width / 2;
+    const centerY = this.scale.height / 2;
+    const frameIndex = Math.min(this.spritesheetTesterFrameIndex, this.textures.get('spritesheet-test').frameTotal - 1);
+    this.spritesheetTesterSprite = this.add.sprite(centerX, centerY, 'spritesheet-test', Math.max(0, frameIndex));
+    this.spritesheetTesterSprite.setDepth(100);
+    this.spritesheetTesterSprite.setOrigin(0.5, 0.5);
+    this.spritesheetTesterSprite.setVisible(true);
+  }
+
+  onSpritesheetTesterSelect() {
+    const sel = document.getElementById('spritesheet-tester-select');
+    const val = sel?.value;
+    if (!val) {
+      if (this.spritesheetTesterSprite) {
+        this.spritesheetTesterSprite.destroy();
+        this.spritesheetTesterSprite = null;
+      }
+      if (this.textures.exists('spritesheet-test')) this.textures.remove('spritesheet-test');
+      this.spritesheetTesterConfig = null;
+      document.getElementById('spritesheet-tester-status').textContent = 'Select a spritesheet from the dropdown';
+      return;
+    }
+
+    let config;
+    try {
+      config = JSON.parse(val);
+    } catch {
+      document.getElementById('spritesheet-tester-status').textContent = 'Invalid selection';
+      return;
+    }
+
+    const { png, frameWidth = 64, frameHeight = 64, frameCount = 5 } = config;
+    if (!png) {
+      document.getElementById('spritesheet-tester-status').textContent = 'Missing PNG path';
+      return;
+    }
+
+    this.spritesheetTesterConfig = { frameWidth, frameHeight, frameCount };
+    document.getElementById('spritesheet-tester-status').textContent = 'Loading...';
+
+    if (this.spritesheetTesterSprite) {
+      this.spritesheetTesterSprite.destroy();
+      this.spritesheetTesterSprite = null;
+    }
+    if (this.textures.exists('spritesheet-test')) {
+      this.textures.remove('spritesheet-test');
+    }
+
+    const url = `/spritesheets-test/${png}`;
+    this.load.reset();
+    this.load.spritesheet('spritesheet-test', url, { frameWidth, frameHeight });
+    this.load.once('complete', () => {
+      this.spritesheetTesterFrameIndex = 0;
+      const centerX = this.scale.width / 2;
+      const centerY = this.scale.height / 2;
+      this.spritesheetTesterSprite = this.add.sprite(centerX, centerY, 'spritesheet-test', 0);
+      this.spritesheetTesterSprite.setDepth(100);
+      this.spritesheetTesterSprite.setOrigin(0.5, 0.5);
+      this.spritesheetTesterSprite.setVisible(true);
+      document.getElementById('spritesheet-tester-status').textContent = `Loaded — ${frameCount} frames at 8 FPS`;
+    });
+    this.load.once('loaderror', () => {
+      document.getElementById('spritesheet-tester-status').textContent = 'Failed to load spritesheet';
+    });
+    this.load.start();
   }
 
   buildConfigureCompositionSelector() {
@@ -295,6 +512,8 @@ class ViewerScene extends Phaser.Scene {
           offsetY: unitLayer?.offsetY ?? 3,
           scale: unitLayer?.scale ?? 0.5,
           fps: unitLayer?.fps ?? 8,
+          slotIndex: 1,
+          timelineBlocks: [],
         },
         {
           animEntry: effectEntry,
@@ -303,6 +522,8 @@ class ViewerScene extends Phaser.Scene {
           offsetY: effectLayer?.offsetY ?? (ATTACK_TO_SHOOT_EFFECT[animName]?.offsetY ?? 0),
           scale: effectLayer?.scale ?? 0.3,
           fps: effectLayer?.fps ?? 4,
+          slotIndex: 2,
+          timelineBlocks: effectLayer?.timelineBlocks ?? [{ baseFrame: 2 }],
         },
         null,
       ];
@@ -319,6 +540,8 @@ class ViewerScene extends Phaser.Scene {
             offsetY: layer.offsetY ?? 0,
             scale: layer.scale ?? (layer.stem === 'Extras' ? 0.2 : 0.5),
             fps: layer.fps ?? 8,
+            slotIndex: slots.length + 1,
+            timelineBlocks: layer.timelineBlocks ?? [],
           });
         }
       }
@@ -412,7 +635,8 @@ class ViewerScene extends Phaser.Scene {
         offsetY: existing?.offsetY ?? 0,
         scale,
         fps,
-        frameIndex: 0,
+        slotIndex,
+        timelineBlocks: existing?.timelineBlocks ?? [],
       };
     }
     this.loadConfigureTextures();
@@ -490,6 +714,10 @@ class ViewerScene extends Phaser.Scene {
 
   buildConfigureGrid() {
     this.destroyConfigureGrid();
+    for (let i = 0; i < this.configureSlots.length; i++) {
+      const s = this.configureSlots[i];
+      if (s) s.slotIndex = i + 1;
+    }
     const centerX = 400;
     const centerY = 300;
     const gridSize = 400;
@@ -561,6 +789,9 @@ class ViewerScene extends Phaser.Scene {
       });
     }
     this.updateConfigureMoveSlotDropdown();
+    this.computeConfigureOutputFrameList();
+    this.buildConfigureTimeline();
+    this.applyConfigureOutputFrame();
   }
 
   destroyConfigureGrid() {
@@ -570,6 +801,141 @@ class ViewerScene extends Phaser.Scene {
     }
     this.configureGridGraphics = null;
     this.configureGridSprites = [];
+  }
+
+  /** Compute output frame list from slots + timelineBlocks. Each output frame = which layer frames to show. */
+  computeConfigureOutputFrameList() {
+    const slots = this.configureSlots.filter(Boolean).sort((a, b) => a.layer - b.layer);
+    if (slots.length === 0) {
+      this.configureOutputFrameList = [];
+      return;
+    }
+    const baseSlot = slots[0];
+    const baseFrames = baseSlot.animEntry?.anim?.frames ?? [];
+    const list = [];
+    for (let baseIdx = 0; baseIdx < baseFrames.length; baseIdx++) {
+      const overlaySlots = slots.filter((s) => s.layer > 0 && (s.timelineBlocks ?? []).some((b) => b.baseFrame === baseIdx));
+      if (overlaySlots.length === 0) {
+        list.push({ layers: [{ slotIndex: baseSlot.slotIndex ?? 1, frameI: baseFrames[baseIdx] }] });
+      } else {
+        const n = Math.max(1, ...overlaySlots.map((s) => (s.animEntry?.anim?.frames?.length ?? 1)));
+        for (let i = 0; i < n; i++) {
+          const layers = [{ slotIndex: baseSlot.slotIndex ?? 1, frameI: baseFrames[baseIdx] }];
+          for (const ov of overlaySlots) {
+            const frames = ov.animEntry?.anim?.frames ?? [];
+            const fi = frames[i % frames.length];
+            if (fi != null) layers.push({ slotIndex: ov.slotIndex ?? 0, frameI: fi });
+          }
+          list.push({ layers });
+        }
+      }
+    }
+    this.configureOutputFrameList = list;
+    this.configureOutputFrameIndex = Math.min(this.configureOutputFrameIndex, Math.max(0, list.length - 1));
+  }
+
+  buildConfigureTimeline() {
+    const gridEl = document.getElementById('timeline-grid');
+    if (!gridEl) return;
+    const slots = this.configureSlots.filter(Boolean).sort((a, b) => a.layer - b.layer);
+    if (slots.length === 0) {
+      gridEl.innerHTML = '';
+      return;
+    }
+    const baseSlot = slots[0];
+    const baseFrames = baseSlot.animEntry?.anim?.frames ?? [];
+    const baseFrameCount = baseFrames.length;
+    gridEl.innerHTML = '';
+
+    for (let si = 0; si < slots.length; si++) {
+      const slot = slots[si];
+      const row = document.createElement('div');
+      row.className = 'timeline-row';
+      const label = document.createElement('span');
+      label.className = 'timeline-layer-label';
+      label.textContent = slot.animEntry?.displayName ?? `Layer ${slot.layer}`;
+      row.appendChild(label);
+
+      const cellsEl = document.createElement('div');
+      cellsEl.className = 'timeline-cells';
+
+      if (slot.layer === 0) {
+        for (let i = 0; i < baseFrameCount; i++) {
+          const cell = document.createElement('div');
+          cell.className = 'timeline-cell base';
+          cell.dataset.layerIndex = String(si);
+          cell.dataset.baseFrame = String(i);
+          cell.textContent = String(i);
+          cellsEl.appendChild(cell);
+        }
+      } else {
+        for (let i = 0; i < baseFrameCount; i++) {
+          const cell = document.createElement('div');
+          cell.className = 'timeline-cell overlay';
+          cell.dataset.slotIndex = String(slot.slotIndex ?? si + 1);
+          cell.dataset.baseFrame = String(i);
+          const blocks = slot.timelineBlocks ?? [];
+          const hasBlock = blocks.some((b) => b.baseFrame === i);
+          if (hasBlock) cell.classList.add('has-block');
+          cell.textContent = hasBlock ? '●' : '○';
+          cell.addEventListener('click', () => {
+            this.toggleTimelineBlock(parseInt(cell.dataset.slotIndex, 10), parseInt(cell.dataset.baseFrame, 10));
+          });
+          cellsEl.appendChild(cell);
+        }
+      }
+      row.appendChild(cellsEl);
+      gridEl.appendChild(row);
+    }
+  }
+
+  toggleTimelineBlock(slotIndex, baseFrame) {
+    const slot = this.configureSlots[slotIndex - 1];
+    if (!slot || slot.layer === 0) return;
+    let blocks = slot.timelineBlocks ?? [];
+    const idx = blocks.findIndex((b) => b.baseFrame === baseFrame);
+    if (idx >= 0) {
+      blocks = blocks.filter((_, i) => i !== idx);
+    } else {
+      blocks = [...blocks, { baseFrame, startFrame: baseFrame, endFrame: baseFrame + 1 }];
+      blocks.sort((a, b) => a.baseFrame - b.baseFrame);
+    }
+    slot.timelineBlocks = blocks;
+    this.computeConfigureOutputFrameList();
+    this.buildConfigureTimeline();
+    this.applyConfigureOutputFrame();
+    document.getElementById('configure-status').textContent =
+      blocks.length > 0 ? `Timeline: overlay on frames [${blocks.map((b) => b.baseFrame).join(', ')}]` : 'Timeline: click cells to place overlay';
+  }
+
+  applyConfigureOutputFrame() {
+    const list = this.configureOutputFrameList;
+    if (list.length === 0) return;
+    const spec = list[this.configureOutputFrameIndex % list.length];
+    for (const { sprite, slot } of this.configureGridSprites) {
+      const layerSpec = spec.layers.find((l) => l.slotIndex === slot.slotIndex);
+      if (!layerSpec) {
+        sprite.setVisible(false);
+        continue;
+      }
+      sprite.setVisible(true);
+      const frameI = layerSpec.frameI;
+      const key = `f-${slot.animEntry.stem}-${frameI}`;
+      if (!this.textures.exists(key)) continue;
+      sprite.setTexture(key);
+      sprite.setFlipX(slot.animEntry?.anim?.flipX ?? false);
+      const meta = this.configureGridMeta[slot.animEntry.stem];
+      const frameData = meta?.frames?.find((f) => f.i === frameI);
+      if (frameData) {
+        const tex = sprite.texture;
+        const w = tex.getSourceImage().width || 1;
+        const h = tex.getSourceImage().height || 1;
+        sprite.setOrigin(
+          Math.max(0, Math.min(1, frameData.ox / w)),
+          Math.max(0, Math.min(1, frameData.oy / h))
+        );
+      }
+    }
   }
 
   hideConfigureGrid() {
@@ -584,30 +950,6 @@ class ViewerScene extends Phaser.Scene {
     this.loadConfigureTextures();
   }
 
-  applyConfigureGridFrame(cell) {
-    const { sprite, slot } = cell;
-    const { animEntry, slotIndex } = slot;
-    const { stem, anim } = animEntry;
-    const frameI = anim.frames[cell.frameIndex % anim.frames.length];
-    const key = `f-${stem}-${frameI}`;
-    if (!this.textures.exists(key)) return;
-
-    sprite.setTexture(key);
-    sprite.setFlipX(anim.flipX ?? false);
-
-    const meta = this.configureGridMeta[stem];
-    const frameData = meta?.frames?.find((f) => f.i === frameI);
-    if (frameData) {
-      const tex = sprite.texture;
-      const w = tex.getSourceImage().width || 1;
-      const h = tex.getSourceImage().height || 1;
-      sprite.setOrigin(
-        Math.max(0, Math.min(1, frameData.ox / w)),
-        Math.max(0, Math.min(1, frameData.oy / h))
-      );
-    }
-  }
-
   toggleConfigurePlay() {
     this.configurePlaying = !this.configurePlaying;
     document.getElementById('configure-play-btn').textContent = this.configurePlaying ? 'Pause' : 'Play';
@@ -616,12 +958,10 @@ class ViewerScene extends Phaser.Scene {
   stepConfigureFrame() {
     this.configurePlaying = false;
     document.getElementById('configure-play-btn').textContent = 'Play';
-    for (const cell of this.configureGridSprites) {
-      const slot = this.configureSlots[cell.slot.slotIndex - 1];
-      if (slot && slot.animEntry?.anim?.frames?.length) {
-        cell.frameIndex = (cell.frameIndex + 1) % slot.animEntry.anim.frames.length;
-        this.applyConfigureGridFrame(cell);
-      }
+    if (this.configureOutputFrameList.length > 0) {
+      this.configureOutputFrameIndex =
+        (this.configureOutputFrameIndex + 1) % this.configureOutputFrameList.length;
+      this.applyConfigureOutputFrame();
     }
   }
 
@@ -653,6 +993,7 @@ class ViewerScene extends Phaser.Scene {
         offsetY: s.offsetY,
         scale: s.scale ?? (s.animEntry?.stem === 'Extras' ? 0.2 : 0.5),
         fps: s.fps ?? 8,
+        timelineBlocks: s.timelineBlocks ?? [],
       }));
 
     const comp = { id: compId, layers };
@@ -685,48 +1026,243 @@ class ViewerScene extends Phaser.Scene {
     document.getElementById('configure-status').textContent = statusMsg + 'Switch to Units tab to see updates.';
   }
 
+  async exportCompositionToSpritesheet() {
+    const slots = this.configureSlots.filter(Boolean);
+    if (slots.length === 0) {
+      document.getElementById('configure-status').textContent = 'Add at least one animation to export';
+      return;
+    }
+    let compId = this.configureEditingId;
+    if (!compId) {
+      compId = document.getElementById('composition-id')?.value?.trim();
+    }
+    if (!compId && slots[0]) compId = slots[0].animEntry.id;
+    if (!compId) {
+      document.getElementById('configure-status').textContent = 'Enter a composition ID to export';
+      return;
+    }
+
+    this.computeConfigureOutputFrameList();
+    const list = this.configureOutputFrameList;
+    if (list.length === 0) {
+      document.getElementById('configure-status').textContent = 'No output frames to export';
+      return;
+    }
+
+    const PADDING = 1;
+    const EXPORT_SCALE = 2;
+
+    const computeFrameBounds = (spec) => {
+      let minLeft = Infinity, maxRight = -Infinity, minTop = Infinity, maxBottom = -Infinity;
+      for (const layerSpec of spec.layers) {
+        const slot = this.configureSlots[layerSpec.slotIndex - 1];
+        if (!slot) continue;
+        const key = `f-${slot.animEntry.stem}-${layerSpec.frameI}`;
+        if (!this.textures.exists(key)) continue;
+        const tex = this.textures.get(key);
+        const img = tex.getSourceImage();
+        if (!img || !img.complete) continue;
+        const meta = this.configureGridMeta[slot.animEntry.stem];
+        const frameData = meta?.frames?.find((f) => f.i === layerSpec.frameI);
+        const w = img.width || 1;
+        const h = img.height || 1;
+        const ox = frameData ? Math.max(0, Math.min(1, frameData.ox / w)) : 0.5;
+        const oy = frameData ? Math.max(0, Math.min(1, frameData.oy / h)) : 0.5;
+        const scale = slot.scale ?? 0.5;
+        const x = slot.offsetX ?? 0;
+        const y = slot.offsetY ?? 0;
+        const drawW = w * scale;
+        const drawH = h * scale;
+        const left = x - drawW * ox;
+        const right = x + drawW * (1 - ox);
+        const top = y - drawH * oy;
+        const bottom = y + drawH * (1 - oy);
+        minLeft = Math.min(minLeft, left);
+        maxRight = Math.max(maxRight, right);
+        minTop = Math.min(minTop, top);
+        maxBottom = Math.max(maxBottom, bottom);
+      }
+      return { minLeft, maxRight, minTop, maxBottom };
+    };
+
+    let maxContentW = 0;
+    let maxContentH = 0;
+    const frameBoundsList = [];
+    for (const spec of list) {
+      const b = computeFrameBounds(spec);
+      frameBoundsList.push(b);
+      const w = b.maxRight - b.minLeft;
+      const h = b.maxBottom - b.minTop;
+      if (w > 0 && h > 0) {
+        maxContentW = Math.max(maxContentW, w);
+        maxContentH = Math.max(maxContentH, h);
+      }
+    }
+    if (maxContentW <= 0) maxContentW = 1;
+    if (maxContentH <= 0) maxContentH = 1;
+
+    const frameW = Math.ceil(maxContentW) + PADDING * 2;
+    const frameH = Math.ceil(maxContentH) + PADDING * 2;
+    const exportFrameW = frameW * EXPORT_SCALE;
+    const exportFrameH = frameH * EXPORT_SCALE;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = exportFrameW * list.length;
+    canvas.height = exportFrameH;
+    const ctx = canvas.getContext('2d');
+
+    for (let i = 0; i < list.length; i++) {
+      const spec = list[i];
+      const b = frameBoundsList[i];
+      const offsetX = PADDING - b.minLeft;
+      const offsetY = PADDING - b.minTop;
+
+      for (const layerSpec of spec.layers) {
+        const slot = this.configureSlots[layerSpec.slotIndex - 1];
+        if (!slot) continue;
+        const key = `f-${slot.animEntry.stem}-${layerSpec.frameI}`;
+        if (!this.textures.exists(key)) continue;
+
+        const tex = this.textures.get(key);
+        const img = tex.getSourceImage();
+        if (!img || !img.complete) continue;
+
+        const meta = this.configureGridMeta[slot.animEntry.stem];
+        const frameData = meta?.frames?.find((f) => f.i === layerSpec.frameI);
+        const w = img.width || 1;
+        const h = img.height || 1;
+        const ox = frameData ? Math.max(0, Math.min(1, frameData.ox / w)) : 0.5;
+        const oy = frameData ? Math.max(0, Math.min(1, frameData.oy / h)) : 0.5;
+        const scale = slot.scale ?? 0.5;
+        const x = slot.offsetX ?? 0;
+        const y = slot.offsetY ?? 0;
+
+        const drawW = w * scale * EXPORT_SCALE;
+        const drawH = h * scale * EXPORT_SCALE;
+        const drawX = (i * frameW + offsetX + x - (w * scale) * ox) * EXPORT_SCALE;
+        const drawY = (offsetY + y - (h * scale) * oy) * EXPORT_SCALE;
+
+        ctx.save();
+        if (slot.animEntry?.anim?.flipX) {
+          ctx.translate(drawX + drawW, drawY);
+          ctx.scale(-1, 1);
+          ctx.translate(-drawX - drawW, -drawY);
+        }
+        ctx.drawImage(img, 0, 0, w, h, drawX, drawY, drawW, drawH);
+        ctx.restore();
+      }
+    }
+
+    const name = compId.replace(/\//g, '_').replace(/\s+/g, '_');
+
+    const json = {
+      frameWidth: exportFrameW,
+      frameHeight: exportFrameH,
+      frameCount: list.length,
+      frames: list.map((_, i) => ({ x: i * exportFrameW, y: 0, w: exportFrameW, h: exportFrameH })),
+    };
+    const jsonBlob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+    const a2 = document.createElement('a');
+    a2.href = URL.createObjectURL(jsonBlob);
+    a2.download = `${name}.json`;
+    a2.click();
+    URL.revokeObjectURL(a2.href);
+
+    await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('Canvas toBlob failed'));
+            return;
+          }
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `${name}.png`;
+          a.click();
+          URL.revokeObjectURL(a.href);
+          resolve();
+        },
+        'image/png',
+        1
+      );
+    });
+
+    document.getElementById('configure-status').textContent = `Exported ${name}.png and ${name}.json to Downloads`;
+  }
+
   switchTab(tab) {
     const tabSprite = document.getElementById('tab-sprite');
     const tabUnits = document.getElementById('tab-units');
     const tabEffects = document.getElementById('tab-effects');
     const tabConfigure = document.getElementById('tab-configure');
+    const tabSpritesheet = document.getElementById('tab-spritesheet');
     const spriteUI = document.getElementById('sprite-viewer-ui');
     const unitsUI = document.getElementById('units-ui');
     const effectsUI = document.getElementById('effects-ui');
     const configureUI = document.getElementById('configure-ui');
+    const spritesheetUI = document.getElementById('spritesheet-tester-ui');
 
     this.activeTab = tab;
     tabSprite.classList.toggle('active', tab === 'sprite');
     tabUnits.classList.toggle('active', tab === 'units');
     tabEffects.classList.toggle('active', tab === 'effects');
     tabConfigure.classList.toggle('active', tab === 'configure');
+    tabSpritesheet.classList.toggle('active', tab === 'spritesheet');
     spriteUI.classList.toggle('active', tab === 'sprite');
     unitsUI.classList.toggle('active', tab === 'units');
     effectsUI.classList.toggle('active', tab === 'effects');
     configureUI.classList.toggle('active', tab === 'configure');
+    spritesheetUI.classList.toggle('active', tab === 'spritesheet');
 
     if (tab === 'sprite') {
+      document.getElementById('spritesheet-tester-bar')?.style.setProperty('display', 'none');
+      document.getElementById('canvas-wrapper')?.classList.remove('with-spritesheet-bar');
       this.hideUnitGrid();
       this.hideEffectsGrid();
       this.hideConfigureGrid();
+      this.hideSpritesheetTester();
       if (this.sprite) this.sprite.setVisible(true);
-    } else if (tab === 'units') {
+      this.cameras.main.setZoom(1);
+    } else if (tab === 'spritesheet') {
+      this.hideUnitGrid();
       this.hideEffectsGrid();
       this.hideConfigureGrid();
       if (this.sprite) this.sprite.setVisible(false);
+      const bar = document.getElementById('spritesheet-tester-bar');
+      const canvasWrap = document.getElementById('canvas-wrapper');
+      if (bar) bar.style.display = 'flex';
+      if (canvasWrap) canvasWrap.classList.add('with-spritesheet-bar');
+      this.loadSpritesheetTesterMap();
+      this.cameras.main.setZoom(this.spritesheetTesterZoom);
+    } else if (tab === 'units') {
+      document.getElementById('spritesheet-tester-bar')?.style.setProperty('display', 'none');
+      document.getElementById('canvas-wrapper')?.classList.remove('with-spritesheet-bar');
+      this.hideEffectsGrid();
+      this.hideConfigureGrid();
+      this.hideSpritesheetTester();
+      if (this.sprite) this.sprite.setVisible(false);
+      this.cameras.main.setZoom(1);
       const sel = document.getElementById('unit-select');
       if (sel.value) this.loadUnitGrid(JSON.parse(sel.value));
     } else if (tab === 'configure') {
+      document.getElementById('spritesheet-tester-bar')?.style.setProperty('display', 'none');
+      document.getElementById('canvas-wrapper')?.classList.remove('with-spritesheet-bar');
       this.hideUnitGrid();
       this.hideEffectsGrid();
+      this.hideSpritesheetTester();
       if (this.sprite) this.sprite.setVisible(false);
+      this.cameras.main.setZoom(1);
       this.buildConfigureCompositionSelector();
       this.buildConfigureSlotsDropdowns();
       this.scheduleConfigureLoad();
     } else {
+      document.getElementById('spritesheet-tester-bar')?.style.setProperty('display', 'none');
+      document.getElementById('canvas-wrapper')?.classList.remove('with-spritesheet-bar');
       this.hideUnitGrid();
       this.hideConfigureGrid();
+      this.hideSpritesheetTester();
       if (this.sprite) this.sprite.setVisible(false);
+      this.cameras.main.setZoom(1);
       this.loadEffectsGrid();
     }
   }
@@ -761,6 +1297,25 @@ class ViewerScene extends Phaser.Scene {
       document.getElementById('units-status').textContent = `Error: ${e.message}`;
       this.unitGridLoadInProgress = false;
       return;
+    }
+
+    this.unitGridComposites = {};
+    for (const anim of UNIT_ANIMATIONS) {
+      const compId = `${stem}/${anim.name}`;
+      const comp = this.animationCompositions?.compositions?.find((c) => c.id === compId);
+      if (!comp) continue;
+      const name = compId.replace(/\//g, '_').replace(/\s+/g, '_');
+      try {
+        const res = await fetch(`/${path}/composite/${name}.json`);
+        if (res.ok) {
+          const json = await res.json();
+          this.unitGridComposites[compId] = { frameCount: json.frameCount ?? json.frames?.length ?? 0 };
+          this.load.spritesheet(`composite-${name}`, `/${path}/composite/${name}.png`, {
+            frameWidth: json.frameWidth ?? 128,
+            frameHeight: json.frameHeight ?? 128,
+          });
+        }
+      } catch {}
     }
 
     const keyPrefix = `f-${stem}-`;
@@ -836,23 +1391,37 @@ class ViewerScene extends Phaser.Scene {
       const row = Math.floor(idx / cols);
       const cx = col * cellW + cellW / 2;
       const cy = row * cellH + cellH / 2;
+      const compId = `${this.unitGridStem}/${anim.name}`;
+      const compositeName = compId.replace(/\//g, '_').replace(/\s+/g, '_');
+      const compositeKey = `composite-${compositeName}`;
+      const compositeMeta = this.unitGridComposites[compId];
 
-      const frameI = anim.frames[0];
-      const key = `${keyPrefix}${frameI}`;
-      if (!this.textures.exists(key)) continue;
+      let sprite;
+      let shootEffect = null;
+      let useComposite = compositeMeta && this.textures.exists(compositeKey);
 
-      const sprite = this.add.sprite(cx, cy, key);
-      sprite.setDepth(1);
-      sprite.setFlipX(anim.flipX);
+      if (useComposite) {
+        sprite = this.add.sprite(cx, cy, compositeKey, 0);
+        sprite.setDepth(1);
+        sprite.setOrigin(0.5, 0.5);
+      } else {
+        const frameI = anim.frames[0];
+        const key = `${keyPrefix}${frameI}`;
+        if (!this.textures.exists(key)) continue;
 
-      const frameData = this.unitGridMeta.frames.find((f) => f.i === frameI);
-      if (frameData) {
-        const tex = sprite.texture;
-        const w = tex.getSourceImage().width || 1;
-        const h = tex.getSourceImage().height || 1;
-        const ox = Math.max(0, Math.min(1, frameData.ox / w));
-        const oy = Math.max(0, Math.min(1, frameData.oy / h));
-        sprite.setOrigin(ox, oy);
+        sprite = this.add.sprite(cx, cy, key);
+        sprite.setDepth(1);
+        sprite.setFlipX(anim.flipX);
+
+        const frameData = this.unitGridMeta.frames.find((f) => f.i === frameI);
+        if (frameData) {
+          const tex = sprite.texture;
+          const w = tex.getSourceImage().width || 1;
+          const h = tex.getSourceImage().height || 1;
+          const ox = Math.max(0, Math.min(1, frameData.ox / w));
+          const oy = Math.max(0, Math.min(1, frameData.oy / h));
+          sprite.setOrigin(ox, oy);
+        }
       }
 
       const scale = Math.min(maxSpriteSize / (sprite.width || 1), maxSpriteSize / (sprite.height || 1));
@@ -863,8 +1432,7 @@ class ViewerScene extends Phaser.Scene {
         color: '#ccc',
       }).setOrigin(0.5, 1).setDepth(2);
 
-      let shootEffect = null;
-      const compId = `${this.unitGridStem}/${anim.name}`;
+      if (!useComposite) {
       const comp = this.animationCompositions?.compositions?.find((c) => c.id === compId);
       if (comp && comp.layers?.length > 0 && this.effectsGridLoaded) {
         const overlayLayers = comp.layers.filter((l) => l.stem !== this.unitGridStem);
@@ -935,6 +1503,7 @@ class ViewerScene extends Phaser.Scene {
           shootEffect = { sprite: effectSprite, shoot };
         }
       }
+      }
 
       this.unitGridSprites.push({
         sprite,
@@ -943,12 +1512,23 @@ class ViewerScene extends Phaser.Scene {
         frameIndex: 0,
         lastAdvance: 0,
         shootEffect,
+        compositeKey: useComposite ? compositeKey : null,
+        compositeFrameCount: useComposite ? (compositeMeta?.frameCount ?? 0) : null,
       });
     }
   }
 
   applyUnitGridFrame(cell) {
-    const { sprite, anim, frameIndex, shootEffect } = cell;
+    const { sprite, anim, frameIndex, shootEffect, compositeKey, compositeFrameCount } = cell;
+
+    if (compositeKey && compositeFrameCount) {
+      const fi = frameIndex % compositeFrameCount;
+      if (this.textures.exists(compositeKey)) {
+        sprite.setTexture(compositeKey, fi);
+      }
+      return;
+    }
+
     const frameI = anim.frames[frameIndex];
     const key = `f-${this.unitGridStem}-${frameI}`;
     if (!this.textures.exists(key)) return;
@@ -1325,17 +1905,34 @@ class ViewerScene extends Phaser.Scene {
   }
 
   update(time, delta) {
-    if (this.activeTab === 'configure' && this.configurePlaying && this.configureGridSprites.length > 0) {
-      for (const cell of this.configureGridSprites) {
-        cell.lastAdvance += delta;
-        const slot = this.configureSlots[cell.slot.slotIndex - 1];
-        if (slot?.animEntry?.anim?.frames?.length) {
-          const msPerFrame = 1000 / (slot.fps ?? 8);
-          while (cell.lastAdvance >= msPerFrame) {
-            cell.lastAdvance -= msPerFrame;
-            cell.frameIndex = (cell.frameIndex + 1) % slot.animEntry.anim.frames.length;
-            this.applyConfigureGridFrame(cell);
+    if (this.activeTab === 'spritesheet' && this.spritesheetTesterSprite && this.spritesheetTesterConfig) {
+      const frameCount = this.spritesheetTesterConfig.frameCount;
+      const tex = this.textures.exists('spritesheet-test') ? this.textures.get('spritesheet-test') : null;
+      const hasFrames = tex && tex.frameTotal > 0;
+      if (frameCount > 0 && hasFrames) {
+        this.spritesheetTesterLastAdvance += delta;
+        const msPerFrame = 125;
+        while (this.spritesheetTesterLastAdvance >= msPerFrame) {
+          this.spritesheetTesterLastAdvance -= msPerFrame;
+          this.spritesheetTesterFrameIndex = (this.spritesheetTesterFrameIndex + 1) % frameCount;
+          if (this.spritesheetTesterFrameIndex < tex.frameTotal) {
+            this.spritesheetTesterSprite.setFrame(this.spritesheetTesterFrameIndex);
           }
+        }
+      }
+      return;
+    }
+
+    if (this.activeTab === 'configure' && this.configurePlaying && this.configureGridSprites.length > 0) {
+      const baseSlot = this.configureSlots.find((s) => s && s.layer === 0);
+      const msPerFrame = baseSlot ? 1000 / (baseSlot.fps ?? 8) : 125;
+      this.configureLastAdvance += delta;
+      if (this.configureOutputFrameList.length > 0) {
+        while (this.configureLastAdvance >= msPerFrame) {
+          this.configureLastAdvance -= msPerFrame;
+          this.configureOutputFrameIndex =
+            (this.configureOutputFrameIndex + 1) % this.configureOutputFrameList.length;
+          this.applyConfigureOutputFrame();
         }
       }
       return;
@@ -1358,9 +1955,10 @@ class ViewerScene extends Phaser.Scene {
       const msPerFrame = 125; // 8 FPS
       for (const cell of this.unitGridSprites) {
         cell.lastAdvance += delta;
-        while (cell.lastAdvance >= msPerFrame && cell.anim.frames.length > 0) {
+        const frameCount = cell.compositeFrameCount ?? cell.anim.frames.length;
+        while (cell.lastAdvance >= msPerFrame && frameCount > 0) {
           cell.lastAdvance -= msPerFrame;
-          cell.frameIndex = (cell.frameIndex + 1) % cell.anim.frames.length;
+          cell.frameIndex = (cell.frameIndex + 1) % frameCount;
           this.applyUnitGridFrame(cell);
         }
       }
