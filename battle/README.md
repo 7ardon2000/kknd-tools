@@ -6,8 +6,9 @@ Each battlefield is a screen-sized piece of one of the 35 classic KKnD maps, sho
 so your icons and windows stay calm on top of it. Survivors march in from the left edge of the screen
 and Evolved from the right, and fronts form wherever they meet. Units fight with their real weapons
 and animations: muzzle flashes, rockets with smoke trails, flamethrowers, beetle spit, tank shells,
-burning and exploding deaths, craters and wrecks. Units that break through march on and leave at the
-far edge. The side being pushed back reinforces harder and launches offensives, so the front swings
+burning and exploding deaths, craters and wrecks. Reinforcements arrive in loose groups at different points along the screen edges, and now and then as a
+special squad of one unit type: a SWAT team, a Dire Wolf pack, a column of tanks, a beetle swarm. Units
+that break through march on and leave at the far edge. The side being pushed back reinforces harder and launches offensives, so the front swings
 back and forth. Now and then the losing side calls in a Wilbur bomber or a Wasp.
 
 Every 15 minutes the screen fades to black and fades back in on a new battlefield from a different map.
@@ -53,6 +54,7 @@ for example `index.html?map=desertstorm&rotate=5&teams=mixed,mixed`.
 | Vehicles | `vehicles` | on | Off = infantry only |
 | Lethality | `lethality` | `0.9` | Damage multiplier: higher means shorter, bloodier fights |
 | Reinforcements | `wave` | `8` | Average seconds between reinforcement waves |
+| Special squads | `squads` | `0.18` | Share of waves that are a squad of one unit type (`0` = never) |
 | Battlefield every | `rotate` | `15` | Minutes before fading to the next battlefield (`0` = never) |
 | Airstrikes | `airstrike` | `2` | Average minutes between airstrikes (`0` = off) |
 | Corpses stay | `corpses` | `25` | Seconds corpses stay on the ground |
@@ -112,7 +114,10 @@ The zip contains the built page plus `LivelyInfo.json`, `LivelyProperties.json` 
   Maps play from a shuffled playlist; maps smaller than the screen get their edges extended with their
   own ground.
 * **Battle.** Flow fields lead each side to the far edge around cliffs, water and buildings. The
-  battlefield is split into three lanes, each with its own front line.
+  battlefield is split into three lanes, each with its own front line. Waves come as 1–3 loose clusters
+  at random heights; marching units keep their own lane with a slowly wandering heading, and close in
+  on distant enemies at an angle rather than in a straight line, so groups advance as a spread-out
+  front instead of in single file.
 * **Pixel-exact.** The canvas uses the screen's real pixel resolution even with Windows display
   scaling, zoom is always a whole number, and every sprite sits on whole pixels, so the pixel art stays
   crisp.

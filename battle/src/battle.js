@@ -11,6 +11,8 @@ import { Unit } from './unit.js';
 import { cropWorld, MARGIN, pickRegion } from './world.js';
 
 const ASSETS = 'assets/';
+// unique KKnD hero units: squads of these are just 2-3
+const HEROES = ['elpresidente', 'kingzog', 'crazyharry'];
 // level of detail for units away from the screen
 const LOD_MARGIN = 200;
 const LOD_INTERVAL = 200;
@@ -379,10 +381,54 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  /** Where a reinforcement wave enters: one of the bands of the team's off-screen strip. */
-  waveZone(team) {
-    const zones = this.zones[team];
-    return zones[Math.floor(this.rng() * zones.length)];
+  /**
+   * A reinforcement wave: usually 1-3 loose clusters of mixed units entering at random heights along
+   * the team's edge; sometimes a special squad of one unit type (a SWAT team, a Dire Wolf pack, a
+   * column of tanks...).
+   */
+  spawnWave(team) {
+    const room = this.cap[team] - this.count[team];
+    if (room <= 0) return;
+    if (this.rng() < CONFIG.squads) {
+      this.spawnSquad(team, room);
+      return;
+    }
+    let size = Math.min(room, 6 + Math.floor(this.rng() * 6) + (this.boost[team] > 1.5 ? 4 : 0));
+    const groups = 1 + Math.floor(this.rng() * 3);
+    for (let g = 0; g < groups && size > 0; g++) {
+      const n = g === groups - 1 ? size : Math.max(1, Math.round(size / (groups - g) * (0.6 + this.rng() * 0.8)));
+      const cluster = this.clusterZone(team, 50 + this.rng() * 70);
+      for (let i = 0; i < n; i++) this.spawn(team, false, cluster);
+      size -= n;
+    }
+  }
+
+  /** One unit type, as a tight group. Squads may exceed the unit cap a little to arrive in full. */
+  spawnSquad(team, room) {
+    const r = this.rosters[team] || this.rosters[0];
+    const def = r.list[Math.floor(this.rng() * r.list.length)];
+    const hero = HEROES.some((h) => def.id.includes(h));
+    let n;
+    if (hero) n = 2 + Math.floor(this.rng() * 2);
+    else if (def.kind === 'vehicle') n = def.cost >= 900 ? 3 + Math.floor(this.rng() * 2) : 4 + Math.floor(this.rng() * 3);
+    else n = 6 + Math.floor(this.rng() * 5);
+    n = Math.min(n, room + Math.ceil(this.baseCap * 0.2));
+    if (n <= 0) return;
+    const cluster = this.clusterZone(team, def.kind === 'vehicle' ? 70 : 45);
+    for (let i = 0; i < n; i++) this.spawn(team, false, cluster, def);
+    this.lastSquad = { team, unit: def.name, n };
+  }
+
+  stripZone(team) {
+    const z = this.zones[team][0];
+    return { x0: z.x0, x1: z.x1, y0: this.world.tile, y1: this.worldH - this.world.tile };
+  }
+
+  /** A spawn area around a random height on the team's off-screen edge strip. */
+  clusterZone(team, radius) {
+    const z = this.zones[team][0];
+    const y = radius + this.rng() * Math.max(1, this.worldH - 2 * radius);
+    return { x0: z.x0, x1: z.x1, y0: y - radius, y1: y + radius };
   }
 
   /** A passable spawn point: an entry zone on the team's edge, or (opening) anywhere on its half. */
@@ -413,9 +459,10 @@ export class BattleScene extends Phaser.Scene {
     return null;
   }
 
-  spawn(team, deploy = false, zone = null) {
-    const def = this.pickUnit(team);
-    const p = this.spawnPoint(team, deploy, zone);
+  spawn(team, deploy = false, zone = null, def = null) {
+    def = def || this.pickUnit(team);
+    // a cluster on water or cliffs at the edge falls back to anywhere along the side's strip
+    const p = this.spawnPoint(team, deploy, zone) || (deploy ? null : this.spawnPoint(team, false, this.stripZone(team)));
     if (!p) return null;
     const u = new Unit(this, def, team, p[0], p[1]);
     if (CONFIG.debug) u.hpBar = new HpBar(this);
@@ -656,16 +703,12 @@ export class BattleScene extends Phaser.Scene {
       this.updateBalance();
     }
 
-    // reinforcement waves from a random entry zone
+    // reinforcement waves
     for (let team = 0; team < 2; team++) {
       this.waveTimer[team] -= dt * this.boost[team];
       if (this.waveTimer[team] > 0) continue;
       this.waveTimer[team] = CONFIG.waveInterval * 1000 * (0.6 + this.rng() * 0.8);
-      const room = this.cap[team] - this.count[team];
-      if (room <= 0) continue;
-      const size = 6 + Math.floor(this.rng() * 6) + (this.boost[team] > 1.5 ? 4 : 0);
-      const zone = this.waveZone(team);
-      for (let i = 0; i < Math.min(room, size); i++) this.spawn(team, false, zone);
+      this.spawnWave(team);
     }
 
     this.airTimer -= dt;
@@ -701,7 +744,7 @@ export class BattleScene extends Phaser.Scene {
         `${this.world.tileset} ${this.world.width}x${this.world.height}: ${titles}\n` +
         `fps ${Math.round(this.game.loop.actualFps)}  update ${this.perf ? (this.perf.sum / Math.max(1, this.perf.n)).toFixed(2) : '?'} ms  units ${c[0]} vs ${c[1]} (cap ${this.cap[0]}/${this.cap[1]})  ` +
         `front ${this.front.toFixed(2)}${this.offensive ? ` OFFENSIVE ${this.offensive.team}` : ''}  boost ${this.boost[0].toFixed(2)}/${this.boost[1].toFixed(2)}  ` +
-        `kills ${this.kills[0]}:${this.kills[1]}  exits ${this.exits[0]}:${this.exits[1]}  fx ${this.effects.items.length}`;
+        `${this.lastSquad ? `squad: ${this.lastSquad.n} ${this.lastSquad.unit} (${this.lastSquad.team ? 'right' : 'left'})  ` : ''}kills ${this.kills[0]}:${this.kills[1]}  exits ${this.exits[0]}:${this.exits[1]}  fx ${this.effects.items.length}`;
     }
   }
 

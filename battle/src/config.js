@@ -28,6 +28,8 @@ export const CONFIG = {
   rotate: num('rotate', 15),
   /** Average minutes between airstrikes (bomber / wasp), 0 = off. */
   airstrike: num('airstrike', 2),
+  /** Share of reinforcement waves that are special squads of one unit type (0-1). */
+  squads: num('squads', 0.18),
   /** Seconds between reinforcement waves (average). */
   waveInterval: num('wave', 8),
   /** Damage multiplier: >1 makes fights shorter and bloodier. */

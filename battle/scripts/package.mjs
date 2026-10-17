@@ -24,6 +24,7 @@ const props = [
   { name: 'lethality', kind: 'slider', text: 'Lethality', value: 0.9, min: 0.3, max: 4, step: 0.1 },
   { name: 'wave', kind: 'slider', text: 'Seconds between reinforcement waves', value: 8, min: 2, max: 30, step: 1 },
   { name: 'rotate', kind: 'slider', text: 'Minutes per battlefield (0 = never change)', value: 15, min: 0, max: 120, step: 1 },
+  { name: 'squads', kind: 'slider', text: 'Special squads (share of waves that are one unit type)', value: 0.18, min: 0, max: 0.6, step: 0.02 },
   { name: 'airstrike', kind: 'slider', text: 'Minutes between airstrikes (0 = off)', value: 2, min: 0, max: 15, step: 0.5 },
   { name: 'corpses', kind: 'slider', text: 'Seconds corpses and wrecks stay', value: 25, min: 3, max: 120, step: 1 },
   { name: 'speed', kind: 'slider', text: 'Game speed', value: 1, min: 0.25, max: 3, step: 0.25 },

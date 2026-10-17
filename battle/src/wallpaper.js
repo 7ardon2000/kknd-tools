@@ -55,6 +55,7 @@ export function installWallpaperHooks(game) {
       case 'wave': CONFIG.waveInterval = Number(value); break;
       case 'rotate': CONFIG.rotate = Number(value); scene()?.resetRotateTimer?.(); break;
       case 'corpses': CONFIG.corpseTime = Number(value); break;
+      case 'squads': CONFIG.squads = Number(value); break;
       case 'airstrike': CONFIG.airstrike = Number(value); scene()?.resetAirTimer?.(); break;
       case 'speed': CONFIG.speed = Number(value); break;
       case 'fps':

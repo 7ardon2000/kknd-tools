@@ -36,6 +36,7 @@ export class Unit {
     this.shootT = Infinity;
     this.stuckT = 0;
     this.exited = false;
+    this.wander = (battle.rng() - 0.5) * 0.4; // marching heading offset (radians)
     // time accumulated while updated at reduced rate off-screen (see BattleScene LOD)
     this.lodT = battle.rng() * 200;
     // scratch storage reused every frame (no per-frame allocations)
@@ -89,7 +90,7 @@ export class Unit {
       // prefer things we can hurt, and the current target (avoid jitter)
       const dmg = this.weapon.damage[u.kind] ?? 100;
       // prefer enemies roughly ahead so the front stays spread out instead of collapsing into one brawl
-      const lane = Math.abs(u.y - this.y) * 0.6;
+      const lane = Math.abs(u.y - this.y) * 1.1;
       const score = (d + lane) / Math.max(0.2, dmg / 100) * (u === this.target ? 0.7 : 1);
       if (score < bestScore) {
         bestScore = score;
@@ -122,8 +123,21 @@ export class Unit {
           const dx = t.x - this.x;
           const dy = t.y - this.y;
           const l = Math.hypot(dx, dy) || 1;
-          this.dirv[0] = dx / l;
-          this.dirv[1] = dy / l;
+          let vx = dx / l;
+          let vy = dy / l;
+          // far away and ahead: keep advancing in the unit's own lane and angle in gradually, instead of
+          // every unit near a fight beelining for it in a line
+          const ahead = this.team === 0 ? dx > 0 : dx < 0;
+          const fwd = ahead ? Math.max(0, Math.min(1, (l - this.weapon.range * 1.3) / 300)) * 0.75 : 0;
+          if (fwd > 0) {
+            vx = vx * (1 - fwd) + (this.team === 0 ? 1 : -1) * fwd;
+            vy *= 1 - fwd;
+            const n = Math.hypot(vx, vy) || 1;
+            vx /= n;
+            vy /= n;
+          }
+          this.dirv[0] = vx;
+          this.dirv[1] = vy;
           wantMove = this.dirv;
         } else {
           wantMove = b.grid.flowDir(b.flow[this.team], this.x, this.y, this.dirv);
@@ -133,6 +147,16 @@ export class Unit {
         const T = b.grid.tile;
         if (b.flow[this.team][Math.floor(this.y / T) * b.grid.w + Math.floor(this.x / T)] <= 1.5) this.exited = true;
         wantMove = b.grid.flowDir(b.flow[this.team], this.x, this.y, this.dirv);
+        if (wantMove) {
+          // a slowly wandering heading offset (up to ~13 degrees) so columns fan out naturally
+          this.wander += (b.rng() - 0.5) * 0.004 * dt - this.wander * 0.0004 * dt;
+          this.wander = Math.max(-0.23, Math.min(0.23, this.wander));
+          const c = Math.cos(this.wander);
+          const s = Math.sin(this.wander);
+          const vx = wantMove[0] * c - wantMove[1] * s;
+          wantMove[1] = wantMove[0] * s + wantMove[1] * c;
+          wantMove[0] = vx;
+        }
       }
       if (this.hasTurret) this.turnTurret(this.facing, dt);
     }

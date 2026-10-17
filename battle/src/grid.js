@@ -99,9 +99,32 @@ export class Grid {
       }
     }
     if (!bx && !by) return null;
-    // aim for the centre of the chosen neighbour cell so units do not hug walls
-    const tx = (cx + bx + 0.5) * this.tile - px;
-    const ty = (cy + by + 0.5) * this.tile - py;
+    const T = this.tile;
+    let tx;
+    let ty;
+    if (bx && by) {
+      // diagonal (going round an obstacle): mostly the direction itself, with a slight pull toward
+      // the neighbour cell's centre so units do not scrape corners (a full pull lines everyone up)
+      const cxp = ((cx + bx + 0.5) * T - px) / T;
+      const cyp = ((cy + by + 0.5) * T - py) / T;
+      tx = bx * 0.7071 + cxp * 0.3;
+      ty = by * 0.7071 + cyp * 0.3;
+    } else {
+      // straight: keep the unit's own lateral position, so a group advances as a spread-out front
+      // instead of everyone in a 32 px row converging onto the row's centre line; only ease away
+      // from a wall right beside the path
+      tx = bx;
+      ty = by;
+      const fx = px / T - cx; // 0..1 inside the cell
+      const fy = py / T - cy;
+      if (bx) {
+        if (fy < 0.3 && this.isBlockedCell(cx + bx, cy - 1)) ty = 0.35;
+        else if (fy > 0.7 && this.isBlockedCell(cx + bx, cy + 1)) ty = -0.35;
+      } else {
+        if (fx < 0.3 && this.isBlockedCell(cx - 1, cy + by)) tx = 0.35;
+        else if (fx > 0.7 && this.isBlockedCell(cx + 1, cy + by)) tx = -0.35;
+      }
+    }
     const len = Math.hypot(tx, ty) || 1;
     out[0] = tx / len;
     out[1] = ty / len;

@@ -1,7 +1,7 @@
 {
   "name": "kknd-battle",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "KKnD auto-battle live wallpaper (Phaser)",
   "type": "module",
   "scripts": {
