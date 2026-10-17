@@ -2,8 +2,10 @@
   "name": "kknd-tools",
   "private": true,
   "scripts": {
-    "start": "cd viewer && npm run dev",
-    "viewer": "cd viewer && npm run dev",
-    "build:viewer": "cd viewer && npm run build"
-  }
+    "setup": "pip install -r requirements.txt && cd battle && npm install",
+    "assets": "python tools/build_battle_assets.py",
+    "dev": "cd battle && npm run dev",
+    "package": "cd battle && npm run package"
+  },
+  "description": "KKnD fan tools: MOBD sprite extraction and an auto-battle live wallpaper"
 }

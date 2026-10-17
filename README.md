@@ -1,150 +1,81 @@
 # KKnD Tools
 
-A set of **modding tools** for **KKnD** (Krush Kill 'n Destroy) — built by fans, for fans. Extract sprites, preview animations, and tinker with game assets for **solo, offline, just-for-fun** projects.
+Fan-made tools for **KKnD** (Krush Kill 'n Destroy, 1997): extract the game's sprites with correct
+alignment data, and run an endless self-playing KKnD battle as a live desktop wallpaper.
 
-> **Disclaimer:** These tools are intended for **enthusiastic fans** who want more freedom to create personal mods — for testing, experimentation, and fun. **Single-player and offline use only.** Not for multiplayer, competitive, or commercial use.
+> Free, non-commercial fan project for the KKnD community. Not affiliated with Beam Software,
+> Melbourne House or the rights holders. Single-player / offline fun only.
 
----
+## What's here
 
-## ⚠️ WORK IN PROGRESS — Known Issues
+| | |
+|---|---|
+| **[battle/](battle/README.md)** | **KKnD Battle**, a live wallpaper for Lively Wallpaper, Wallpaper Engine or a browser. Classic maps stitched into one large battlefield, Survivors vs Evolved, real weapons and effects, endless reinforcements, a slowly panning camera. |
+| `extract_mobd.py` | Extracts KKnD `.mobd` sprites to PNG frames plus `{Name}_frames.json` metadata (origins, animation structure, weapon/turret points). |
+| `extract-assets.ps1` | Copies `SPRITES.LVL` from a KKnD Xtreme install and runs the extractor. |
+| `tools/` | The Python pipeline: MOBD parser, sprite atlas packer, map renderer, battle asset builder. |
+| `units/`, `effects/`, `ui/` | The raw `.mobd` files from KKnD Xtreme's `SPRITES.LVL`, with their frame metadata. |
+| [documentation.md](documentation.md) | Technical reference: file formats, metadata, how the pipeline works. |
 
-**This project is actively in development.** Expect bugs and rough edges:
+## Quick start
 
-- **Frame sizing**: Exported spritesheet frame sizes can be incorrect for larger units (e.g. DireWolf) or when metadata `w`/`h` is missing. Run `python scripts/backfill_frames_metadata.py` after extraction to improve accuracy.
-- **Export artifacts**: Some sprites may show visual artifacts (e.g. stray pixels) when exporting. Per-cell clipping helps but edge cases remain.
-- **Shoot effect composition**: SWAT attack + muzzle flash composition is tuned for specific units; other units may need manual adjustment.
-- **UI/UX**: The viewer layout and controls are still being refined.
+**Just want the wallpaper?** Get `kknd-battle-wallpaper.zip` and drag it onto
+[Lively Wallpaper](https://www.rocksdanister.com/lively/). See [battle/README.md](battle/README.md) for
+Wallpaper Engine, browser use and all settings.
 
-Use at your own risk. Report issues on [GitHub Issues](https://github.com/TajRizek/kknd-tools/issues).
-
-## What You Get
-
-- **MOBD/LVL extractor** — Converts sprite data from `SPRITES.LVL` to PNG frames with metadata
-- **Frame metadata** (`*_frames.json`) — Rotational/simple animations, directions, per-frame offsets (ox, oy)
-- **Phaser Animation Viewer** — Browser tool to preview and verify extracted animations
-- **Scripts** — Python + PowerShell for extraction and manifest generation
-
-## Quick Start
-
-```powershell
-# 1. Ensure KKnD Xtreme is installed at C:\Games\KKND Xtreme
-# 2. Run extraction (copies game files to content/, extracts MOBD → PNG)
-.\extract-assets.ps1
-
-# 3. For Gen1 sprites, place palette.png in content/ (256-color palette from your game)
-
-# 4. Run the animation viewer
-npm start
-```
-
-Open http://localhost:5173 to preview animations.
-
-**Requires:** [KKnD Xtreme](https://store.steampowered.com/app/281030/KKND_Xtreme/) at `C:\Games\KKND Xtreme`, Python 3, Pillow, Node.js 18+
-
-## Extraction
-
-1. **Phase 0** — Copies game content (SPRITES.LVL, MUTE.SLV, SURV.SLV) from KKnD Xtreme into `content/`
-2. **Phase 1** — Optional: Copy PNG assets (sidebar, UI) if you provide `-SourcePath` to a compatible source
-3. **Phase 2** — Parses MOBD from `sprites.lvl`, exports PNG frames, writes metadata
-
-See [documentation.md](documentation.md) for details.
-
-## Metadata Format
-
-Each sprite folder contains `{Name}_frames.json`:
-
-```json
-{
-  "rotational_count": 50,
-  "simple_count": 0,
-  "total_frames": 248,
-  "frames": [
-    {"i": 0, "anim": "rotational", "frame": 0, "ox": 12, "oy": 13, "dir": 0},
-    ...
-  ]
-}
-```
-
-- **i**: Global frame index → `{Name}_{i:04d}.png`
-- **anim**: `"rotational"` or `"simple"`
-- **frame**: Index within current animation
-- **ox**, **oy**: Anchor point for correct placement
-- **dir** (rotational): Direction 0..N
-- **idx** (simple): Animation index
-
-See [documentation.md](documentation.md) for full details.
-
-## Animation Viewer
+**Build it yourself** (Python 3, Node.js 18+, git):
 
 ```bash
-npm start
+npm run setup      # Python + Node dependencies
+npm run assets     # build sprites, unit data and maps (downloads OpenKrush data on first run)
+npm run dev        # preview at http://localhost:5180
+npm run package    # -> battle/kknd-battle-wallpaper.zip
 ```
 
-Open http://localhost:5173. The viewer uses a **unified four-section layout** — all sections are visible at once (no tabs).
-
-### Section 1 — Sprite Viewer (top)
-
-- **Sprite**: Choose any unit or effect from the dropdown.
-- **Preset**: Quick presets like "stand north", "attack east", or "Custom" for manual frame range.
-- **Frame start / end**: Define which frames to display.
-- **Speed**: Playback rate (frames per second).
-- **Play** / **Step**: Control animation playback.
-
-Use this to inspect a single sprite or browse a frame range.
-
-### Section 2 — Animations
-
-- **Unit**: Select an infantry unit (ElPresidente, SWAT, etc.) or **Effects (Extras)**. Use **Custom...** to pick any sprite and set a frame range manually.
-- **Horizontal strip**: Shows all 25 unit animations or 59 effect animations in one scrollable row. Each cell plays at 8 FPS. Click to select.
-- **Export** / **Export All**: Download spritesheet PNGs (base animations only — no shoot-effect overlay).
-- **Test** / **Test All**: Send the generated spritesheet to Section 4 (Spritesheet Tester).
-
-### Section 3 — Configure (combine sprites)
-
-Compose up to 3 layers (e.g. unit + muzzle flash):
-
-- **Animation**: Pick a SWAT attack (or "New composition...") to edit.
-- **Slots 1–3**: Each slot = one animation (unit, effect, etc.). Set layer order, scale, and FPS.
-- **Timeline**: Click cells to decide when overlays appear (e.g. muzzle flash only on frame 2).
-- **Drag**: Move sprites on the canvas; use Move dropdown + arrow keys for fine control.
-- **Save**: Updates compositions and downloads `animation-compositions.json`.
-- **Export** / **Test**: Render the composed spritesheet or send it to Section 4.
-
-### Section 4 — Spritesheet Tester
-
-- Receives spritesheets from **Test** in Sections 2 or 3.
-- Plays the animation over a map background.
-- **FPS**: Adjust playback speed.
-- **Zoom**: Mouse scroll to zoom in/out.
-- **Drag**: Reposition the sprite on the map.
-
-After extraction, regenerate the sprite list:
+**Extract sprites as PNGs:**
 
 ```bash
-python scripts/generate-viewer-manifest.py
+python extract_mobd.py --from-repo   # from the .mobd files in this repo, no game needed
+.\extract-assets.ps1                 # or from your KKnD Xtreme install (default C:\Games\KKND Xtreme)
 ```
 
-## Output Layout
+PNGs land next to each `.mobd` file (for example `units/swat/SWAT_0000.png`) and are git-ignored.
 
-```
-content/              → sprites.lvl, palette.png (game content; not committed)
-units/direwolf/       → DireWolf.mobd, DireWolf_0000.png..0247.png, DireWolf_frames.json
-effects/extras/       → Extras.mobd, Extras_0000.png..0391.png, Extras_frames.json
-ui/buttons/          → Buttons.mobd, Buttons_*.png, Buttons_frames.json
-viewer/               → Phaser animation tester
-```
+## What was wrong before, and what fixed it
 
-**Note:** Extracted PNGs and `content/` are kept locally for testing. They are not committed to the repo.
+Earlier versions of these tools tried to export units as sprite sheets and line up muzzle flashes and
+other effects by hand. That never worked reliably. Three causes were found and fixed:
 
-## Documentation
+1. **The weapon point data was decoded wrongly.** Every MOBD frame stores where its gun muzzle (or turret
+   mount) is. The old extractor guessed that list's format, so every `points` entry in the metadata was
+   garbage, and effects had to be nudged by hand. The real format is a list of
+   `{id, x, y, z}` records (int32, x/y in 1/256 px) ending with `0xFFFFFFFF`. All committed
+   `*_frames.json` files have been regenerated with correct points.
+2. **Frame origins were treated as unsigned and clamped to the image.** Origins are signed and often lie
+   outside the image. A muzzle flash, for example, is anchored at its base, outside its own pixels. The
+   old viewer clamped them, so flashes always appeared in the wrong place.
+3. **Every unit was assumed to share one frame layout.** In reality each MOBD lists its animations per
+   facing (16 directions) with different frame counts. The battle now reads each unit's real layout,
+   weapons and effects from [OpenKrush](https://github.com/IceReaper/OpenKrush), the open-source KKnD
+   engine.
 
-See [documentation.md](documentation.md) for:
+The parser is now a faithful port of OpenKrush's MOBD reader (`tools/mobd.py`). It also handles a quirk
+of the `.mobd` files in this repo: their internal pointers are absolute offsets into the original
+`SPRITES.LVL`, so each file's original position is recovered automatically. That means the sprites
+decode without the game installed. Details are in [documentation.md](documentation.md).
 
-- How extraction works (phases 0–2)
-- Metadata format and field meanings
-- How to run and use the animation viewer
-- Script parameters and options
+The old manual alignment viewer (`viewer/`) has been removed; the battle app supersedes it. It remains
+in the git history (commit `1818a50`) if you need it.
+
+## Requirements
+
+* Python 3 with Pillow (`pip install -r requirements.txt`)
+* Node.js 18+ (for the battle app)
+* git (the build downloads OpenKrush's data on first run)
+* Optional: KKnD Xtreme ([Steam](https://store.steampowered.com/app/281030/KKND_Xtreme/)), only needed
+  to re-extract from the original game files
 
 ## License
 
-Scripts: GPL-3.0. See [LICENSE](LICENSE). Use responsibly — for personal, non-commercial, offline modding fun only.
+The code is GPL-3.0 (see [LICENSE](LICENSE)); the MOBD parser is a port of GPL-3.0 OpenKrush code.
+KKnD's graphics and data belong to their owners. Personal, non-commercial fan use only.

@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
 """
-KKnD MOBD/LVL Extractor - Extracts unit frames and effects from sprites.lvl to PNG.
-Supports Gen1 (SPRT) and Gen2 (SPNS/SPRC) formats.
-Requires: pip install Pillow
+KKnD MOBD/LVL extractor: SPRITES.LVL (or the .mobd files in this repo) -> PNG frames + metadata JSON.
+
+    python extract_mobd.py                  # from content/sprites.lvl (copied by extract-assets.ps1)
+    python extract_mobd.py --from-repo      # re-parse the .mobd files already in units/, effects/, ui/
+    python extract_mobd.py --metadata-only  # JSON only, no PNGs
+
+Parsing lives in tools/mobd.py (a port of the OpenKrush reader). The palette and the LVL file names
+come from content/ if present, otherwise from OpenKrush (cloned to .cache/openkrush on first use).
+Supports Gen1 (SPRT) and Gen2 (SPNS/SPRC). Requires: pip install Pillow
 """
 
 import json
 import struct
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent / "tools"))
+import mobd  # noqa: E402
 
 try:
     from PIL import Image
@@ -50,302 +59,29 @@ def load_palette(palette_path):
     return colors[:256]
 
 
-class MobdImage:
-    def __init__(self, data, offset, flags, gen1=True):
-        self.offset = offset
-        pos = offset
-        width, height = struct.unpack_from('<ii', data, pos)
-        pos += 8
-        self.width = width
-        self.height = height
-        self.pixels = bytearray(width * height)
+class _Img:
+    __slots__ = ("width", "height", "pixels")
 
-        if gen1:
-            flipped = (flags & 1) == 1
-            is_compressed = data[pos] == 2
-            pos += 1
-            if is_compressed:
-                pos = self._decompress_gen1(data, pos)
-            else:
-                self.pixels[:] = data[pos:pos + len(self.pixels)]
-                pos += len(self.pixels)
-            if flipped:
-                for i in range(height):
-                    row_start = i * width
-                    self.pixels[row_start:row_start+width] = reversed(self.pixels[row_start:row_start+width])
-        else:
-            flipped = ((flags >> 31) & 1) == 1
-            is_compressed = ((flags >> 27) & 1) == 1
-            has_256 = ((flags >> 26) & 1) == 1
-            if is_compressed:
-                pos = self._decompress_gen2(data, pos, has_256)
-            else:
-                self.pixels[:] = data[pos:pos + len(self.pixels)]
-                pos += len(self.pixels)
-            if flipped:
-                for i in range(height):
-                    row_start = i * width
-                    self.pixels[row_start:row_start+width] = reversed(self.pixels[row_start:row_start+width])
-        self.end_pos = pos
-
-    def _decompress_gen1(self, data, pos):
-        decompressed = bytearray()
-        cap = len(self.pixels)
-        while len(decompressed) < cap:
-            compressed_size = data[pos] - 1
-            pos += 1
-            line_end = pos + compressed_size
-            is_skip = True
-            while pos < line_end:
-                chunk = data[pos]
-                pos += 1
-                if is_skip:
-                    decompressed.extend(b'\x00' * chunk)
-                else:
-                    decompressed.extend(data[pos:pos+chunk])
-                    pos += chunk
-                is_skip = not is_skip
-            # Align to width
-            rem = (self.width - (len(decompressed) % self.width)) % self.width
-            decompressed.extend(b'\x00' * rem)
-        self.pixels[:] = decompressed[:cap]
-        return pos
-
-    def _decompress_gen2(self, data, pos, has_256):
-        decompressed = bytearray()
-        cap = len(self.pixels)
-        while len(decompressed) < cap:
-            if has_256:
-                compressed_size, = struct.unpack_from('<H', data, pos)
-                pos += 2
-            else:
-                compressed_size = data[pos]
-                pos += 1
-
-            if compressed_size == 0:
-                decompressed.extend(b'\x00' * self.width)
-            elif not has_256 and compressed_size > 0x80:
-                pixel_count = compressed_size - 0x80
-                for _ in range(pixel_count):
-                    two = data[pos]
-                    pos += 1
-                    decompressed.append((two >> 4) & 0xF)
-                    if len(decompressed) % self.width != 0:
-                        decompressed.append(two & 0xF)
-            else:
-                line_end = pos + compressed_size
-                while pos < line_end:
-                    chunk = data[pos]
-                    pos += 1
-                    if chunk < 0x80:
-                        decompressed.extend(b'\x00' * chunk)
-                    else:
-                        pixel_count = chunk - 0x80
-                        if has_256:
-                            decompressed.extend(data[pos:pos+pixel_count])
-                            pos += pixel_count
-                        else:
-                            size = pixel_count // 2 + pixel_count % 2
-                            for j in range(size):
-                                two = data[pos]
-                                pos += 1
-                                decompressed.append((two >> 4) & 0xF)
-                                if j + 1 < size or pixel_count % 2 == 0:
-                                    decompressed.append(two & 0xF)
-            rem = (self.width - (len(decompressed) % self.width)) % self.width
-            decompressed.extend(b'\x00' * rem)
-        self.pixels[:] = decompressed[:cap]
-        return pos
-
-
-def parse_mobd_render_flags(data, offset, default_palette):
-    """Parse MobdRenderFlags, return (MobdImage, palette_or_none). All offsets absolute in data."""
-    pos = offset
-    if pos + 16 > len(data):
-        return None, None
-    type_chars = bytes(reversed(data[pos:pos+4]))
-    pos += 4
-    type_str = type_chars.decode('ascii', errors='replace')
-    flags, = struct.unpack_from('<I', data, pos)
-    pos += 4
-    gen1 = type_str == 'SPRT'
-    palette = None
-
-    if type_str in ('SPNS', 'SPRC'):
-        pal_off, = struct.unpack_from('<I', data, pos)
-        pos += 4
-        return_pos = pos
-        pos = pal_off
-        if pos + 14 <= len(data):
-            pos += 12  # skip 3x uint32
-            num_colors, = struct.unpack_from('<H', data, pos)
-            pos += 2
-            palette = []
-            for _ in range(min(num_colors, 256)):
-                if pos + 2 > len(data):
-                    break
-                color16, = struct.unpack_from('<H', data, pos)
-                pos += 2
-                r = ((color16 & 0x7c00) >> 7) & 0xff
-                g = ((color16 & 0x03e0) >> 2) & 0xff
-                b = ((color16 & 0x001f) << 3) & 0xff
-                palette.append((r, g, b))
-            while len(palette) < 256:
-                palette.append((0, 0, 0))
-        pos = return_pos
-
-    if pos + 4 > len(data):
-        return None, palette
-    img_offset, = struct.unpack_from('<I', data, pos)
-    # imageOffset is absolute position in data
-    img_offset_abs = img_offset
-    if img_offset_abs < 0 or img_offset_abs >= len(data):
-        return None, palette
-    try:
-        img = MobdImage(data, img_offset_abs, flags, gen1=gen1)
-        return img, palette
-    except (struct.error, IndexError, EOFError):
-        return None, palette
-
-
-def parse_mobd_point_list(data, offset):
-    """
-    Parse the point list at offset. Returns list of {'type': int, 'x': int, 'y': int}.
-    Tries: (1) count uint16 + (type uint8, x int16, y int16) per point - 5 bytes;
-           (2) count uint16 + (x int16, y int16) per point - 4 bytes;
-           (3) count uint16 + (x int32, y int32) per point - 8 bytes.
-    Skips points with |x|>2048 or |y|>2048 (likely parse errors).
-    """
-    points = []
-    if offset == 0 or offset >= len(data):
-        return points
-    pos = offset
-    if pos + 2 > len(data):
-        return points
-    count, = struct.unpack_from('<H', data, pos)
-    pos += 2
-    if count == 0 or count > 64:
-        return points
-    for stride, fmt in [(5, '<Bhh'), (4, '<hh'), (8, '<ii')]:
-        if pos + count * stride > len(data):
-            continue
-        pts = []
-        for _ in range(count):
-            if fmt == '<Bhh':
-                ptype, x, y = struct.unpack_from(fmt, data, pos)
-            else:
-                ptype, x, y = 0, *struct.unpack_from(fmt, data, pos)
-            pos += stride
-            if -2048 <= x <= 2048 and -2048 <= y <= 2048:
-                pts.append({'type': ptype, 'x': x, 'y': y})
-        if pts:
-            return pts
-        pos = offset + 2
-    return points
-
-
-def parse_mobd_frame(data, offset, default_palette):
-    """Parse MobdFrame at offset. Returns (ox, oy, img, palette, points) or (0, 0, None, None, [])."""
-    if offset + 28 > len(data):
-        return 0, 0, None, None, []
-    pos = offset
-    ox, oy = struct.unpack_from('<II', data, pos)
-    pos += 8
-    pos += 4   # unk
-    render_flags_off, = struct.unpack_from('<I', data, pos)
-    pos += 4
-    pos += 8   # boxListOffset, unk
-    point_list_off, = struct.unpack_from('<I', data, pos)
-    if render_flags_off < 0 or render_flags_off >= len(data):
-        return ox, oy, None, None, []
-    img, pal = parse_mobd_render_flags(data, render_flags_off, default_palette)
-    points = parse_mobd_point_list(data, point_list_off)
-    return ox, oy, img, pal, points
-
-
-def _missing_frame_workaround(pos):
-    """Port of MobdAnimation position-specific workarounds."""
-    if pos == 174278:
-        return 2   # Beetle
-    if pos in (2010426, 2010466):
-        return 1   # Flame
-    if pos == 2094122:
-        return 1   # Gort
-    return 0
-
-
-def parse_mobd_animation(data, offset, default_palette):
-    """Parse MobdAnimation at offset. Yields (ox, oy, img, palette) for each frame."""
-    if offset + 8 > len(data):
-        return
-    pos = offset
-    missing = _missing_frame_workaround(pos)
-    pos += 4   # unk
-    while pos + 4 <= len(data):
-        value, = struct.unpack_from('<i', data, pos)
-        pos += 4
-        if value in (0, -1):
-            break
-        if value < 0 or value >= len(data):
-            continue
-        ox, oy, img, pal, points = parse_mobd_frame(data, value, default_palette)
-        if img and img.width > 0 and img.height > 0 and img.width < 2048 and img.height < 2048:
-            yield ox, oy, img, pal, points
-            if missing > 0:
-                missing -= 1
-                yield ox, oy, img, pal, points
+    def __init__(self, w, h, pixels):
+        self.width, self.height, self.pixels = w, h, pixels
 
 
 def parse_mobd(data, mobd_start, mobd_end, default_palette=None):
-    """Parse MOBD structure. Yields (anim_type, anim_idx, frame_idx, global_idx, ox, oy, img, pal, points)."""
-    file_start = mobd_start
-    first_frame_start = mobd_end
-    animation_offsets = []
-    pos = mobd_start
+    """Parse a MOBD embedded in LVL data. Yields
+    (anim_type, anim_idx, frame_idx, global_idx, ox, oy, img, palette, points).
 
-    # Phase 1: collect animation offset positions and find first frame
-    phase2_start = mobd_start
-    while pos + 4 <= first_frame_start and pos < len(data):
-        value, = struct.unpack_from('<i', data, pos)
-        if value == 0 or (0 <= value < pos and value >= file_start):
-            phase2_start = pos  # rewind: we're at the value that triggered break
-            break
-        animation_offsets.append(pos)
-        pos += 4
-        while pos + 4 <= len(data):
-            v, = struct.unpack_from('<i', data, pos)
-            pos += 4
-            if v in (-1, 0):
-                break
-            if 0 < v < len(data):
-                first_frame_start = min(first_frame_start, v)
-
-    # Phase 2: rotational - scan from phase2_start to first_frame_start
-    remaining = list(animation_offsets)
-    scan_pos = phase2_start
-    rotational_idx = 0
-    global_idx = 0
-    while scan_pos + 4 <= first_frame_start and scan_pos < len(data):
-        value, = struct.unpack_from('<I', data, scan_pos)
-        scan_pos += 4
-        if value == 0:
-            continue
-        if value in remaining:
-            remaining.remove(value)
-            for frame_idx, (ox, oy, img, pal, points) in enumerate(parse_mobd_animation(data, value, default_palette)):
-                yield "rotational", rotational_idx, frame_idx, global_idx, ox, oy, img, pal, points
-                global_idx += 1
-            rotational_idx += 1
-
-    # Phase 3: simple animations - remaining table starts
-    simple_idx = 0
-    for anim_off in remaining:
-        if anim_off + 8 > len(data):
-            continue
-        for frame_idx, (ox, oy, img, pal, points) in enumerate(parse_mobd_animation(data, anim_off, default_palette)):
-            yield "simple", simple_idx, frame_idx, global_idx, ox, oy, img, pal, points
-            global_idx += 1
-        simple_idx += 1
+    Uses tools/mobd.py (a port of the OpenKrush reader). Points are
+    {"id", "x", "y"} offsets in pixels from the frame origin; id 0 is the weapon
+    (or turret mount) point. Origins can be negative or exceed the image size
+    (effects anchored outside their own pixels), so never clamp them.
+    """
+    rot, simple = mobd.parse(data[mobd_start:mobd_end], mobd_start)
+    g = 0
+    for kind, anims in (("rotational", rot), ("simple", simple)):
+        for ai, anim in enumerate(anims):
+            for fi, f in enumerate(anim.frames):
+                yield kind, ai, fi, g, f.ox, f.oy, _Img(f.w, f.h, f.pixels), f.palette, f.points
+                g += 1
 
 
 def _image_to_png(img, palette, output_path):
@@ -512,13 +248,46 @@ def main():
     parser = argparse.ArgumentParser(description='Extract MOBD frames from KKnD sprites.lvl')
     parser.add_argument('--metadata-only', action='store_true',
                         help='Only extract frame metadata (with points) to JSON, skip PNG. Works without palette.')
+    parser.add_argument('--from-repo', action='store_true',
+                        help='Re-parse the .mobd files already in units/, effects/, ui/ (no sprites.lvl needed). '
+                             'Use this when you do not have the game installed.')
+    parser.add_argument('--openkrush', help='path to an OpenKrush checkout (default: .cache/openkrush, cloned if needed)')
     args = parser.parse_args()
+
+    # palette and LVL file names: content/ first, else OpenKrush
+    if not palette_path.exists() or not lookup_path.exists():
+        from build_battle_assets import ensure_openkrush
+        gen1 = ensure_openkrush(args.openkrush) / 'mods' / 'openkrush_gen1'
+        if not palette_path.exists():
+            palette_path = gen1 / 'core' / 'rules' / 'palette.png'
+        if not lookup_path.exists():
+            lookup_path = gen1 / 'archives' / 'sprites.lvl.yaml'
+
+    if args.from_repo:
+        palette = load_palette(palette_path) if palette_path.exists() else None
+        for p in sorted(base.glob('*/*/*.mobd')):
+            if p.parts[-3] not in ('units', 'effects', 'ui') or p.stat().st_size == 0:
+                continue
+            data = p.read_bytes()
+            meta = p.with_name(p.stem + '_frames.json')
+            expected = json.loads(meta.read_text())['total_frames'] if meta.exists() else None
+            try:
+                # pointers inside a MOBD are absolute SPRITES.LVL offsets: recover where it lived
+                offset, _, _ = mobd.find_base(data, expected)
+            except ValueError as e:
+                print(f"Skip {p.name}: {e}")
+                continue
+            lvl_like = bytes(offset) + data
+            extract_mobd_to_png(lvl_like, offset, len(data), p.parent, palette or [(0, 0, 0)] * 256, p.name,
+                                metadata_only=palette is None)
+            print(f"Re-parsed {p.name} (LVL offset {offset:#x})")
+        return
 
     if not sprites_lvl.exists():
         print("sprites.lvl not found in content/. Run extract-assets.ps1 first to copy game content from KKnD Xtreme.")
         sys.exit(1)
     if not args.metadata_only and not palette_path.exists():
-        print(f"palette.png not found in content/. Gen1 sprites require a 256-color palette. Place palette.png in {content_dir}")
+        print(f"No palette found ({palette_path}).")
         sys.exit(1)
 
     palette = load_palette(palette_path) if palette_path.exists() else [(0, 0, 0)] * 256
