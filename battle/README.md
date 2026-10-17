@@ -21,7 +21,9 @@ or any browser.
 
 ## Install
 
-Get `kknd-battle-wallpaper.zip` (or build it, see below).
+Download **[kknd-battle-wallpaper.zip](https://github.com/7ardon2000/kknd-tools/releases/latest/download/kknd-battle-wallpaper.zip)**
+from the [latest release](https://github.com/7ardon2000/kknd-tools/releases/latest), or build it yourself
+(see below).
 
 **Lively Wallpaper** (Windows, free: [rocksdanister.com/lively](https://www.rocksdanister.com/lively/))
 1. Drag the zip onto the Lively window, or use **+ Add Wallpaper → Browse**.

@@ -19,9 +19,13 @@ alignment data, and run an endless self-playing KKnD battle as a live desktop wa
 
 ## Quick start
 
-**Just want the wallpaper?** Get `kknd-battle-wallpaper.zip` and drag it onto
-[Lively Wallpaper](https://www.rocksdanister.com/lively/). See [battle/README.md](battle/README.md) for
-Wallpaper Engine, browser use and all settings.
+**Just want the wallpaper?**
+1. Install [Lively Wallpaper](https://apps.microsoft.com/detail/9ntm2qc6qws7) (free, Microsoft Store).
+2. Download **[kknd-battle-wallpaper.zip](https://github.com/7ardon2000/kknd-tools/releases/latest/download/kknd-battle-wallpaper.zip)**
+   (all versions: [Releases](https://github.com/7ardon2000/kknd-tools/releases)).
+3. Drag the zip onto the Lively window and click it.
+
+See [battle/README.md](battle/README.md) for Wallpaper Engine, browser use and all settings.
 
 **Build it yourself** (Python 3, Node.js 18+, git):
 
