@@ -7,24 +7,43 @@ asset pipeline works. For using the tools see [README.md](README.md) and
 ## Repository layout
 
 ```
-extract_mobd.py            MOBD -> PNG frames + {Name}_frames.json
-extract-assets.ps1         copies SPRITES.LVL from KKnD Xtreme into content/ and runs the extractor
+extract_mobd.py            SPRITES.LVL -> PNG frames + {Name}_frames.json (into units/, effects/, ui/)
 tools/
-  mobd.py                  MOBD parser (port of OpenKrush's reader) + base-offset recovery
+  gamedata.py              finds SPRITES.LVL (Steam, GOG, CD, demo download), LVL archive index,
+                           InstallShield cabinet reader for the demo installer
+  mobd.py                  MOBD parser (port of OpenKrush's reader)
   atlas.py                 palette -> RGBA, shadow handling, pivot-correct Phaser atlas packing
   maps.py                  OpenKrush maps (map.bin + tilesets) -> tile data, passability, decor
   miniyaml.py              reader for OpenRA/OpenKrush MiniYaml (with Inherits)
   build_battle_assets.py   builds everything in battle/public/assets
-units/ effects/ ui/        raw .mobd files from SPRITES.LVL + {Name}_frames.json
 battle/                    the live wallpaper (Phaser 3, Vite)
-content/                   (git-ignored) game files copied by extract-assets.ps1
-.cache/openkrush/          (git-ignored) OpenKrush checkout, cloned on first use
+  src/gamefiles/           JavaScript ports of gamedata/mobd/atlas: decodes the player's SPRITES.LVL
+  setup/                   Setup.cmd + setup.ps1: finds the player's game and builds their wallpaper
 ```
+
+Git-ignored, never committed: `content/` (your own game files, optional), `units/`, `effects/`,
+`ui/` (extractor output), `battle/public/gamefiles/` (your SPRITES.LVL for the dev server),
+`.cache/openkrush/` (OpenKrush checkout) and `.cache/kknd-demo/` (the demo, if it was downloaded).
 
 ## Where the data comes from
 
-* **Sprites:** KKnD Xtreme's `LEVELS\640\SPRITES.LVL` embeds about 80 MOBD sprite files. They are
-  already extracted into `units/`, `effects/` and `ui/`, so the game is not needed.
+* **Sprites:** `LEVELS\640\SPRITES.LVL` of the player's own KKnD Xtreme or KKnD (the original KKnD CD
+  has it under `KKND\LEVELS\640`) embeds 81 MOBD sprite files. Nothing from it is stored in this
+  repository or in the wallpaper download. `tools/gamedata.py` looks for it in this order, following
+  OpenKrush's installer (`mods/openkrush_gen1/installer/*.yaml`):
+  1. `content/sprites.lvl`, or the folder in the `KKND_XTREME` environment variable
+  2. Steam: `SteamPath` from the registry, every library in `steamapps/libraryfolders.vdf`, the
+     install folder from `appmanifest_1292170.acf`
+  3. GOG: `HKLM\SOFTWARE\WOW6432Node\GOG.com\Games\1207659107`, value `path`
+  4. common install folders, then every CD drive
+  5. the free official KKnD Xtreme demo, `https://archive.org/download/KKNDXT/KKND_XT.EXE`
+     (SHA-1 `90222373c1ff06a02509f0d811385c0571e398df`). It is a self-extracting installer: a ZIP
+     at offset `0xB7B95` holds `data1.cab`, an InstallShield v5 cabinet, in which
+     `Multiplayer Levels\LEVELS\640\SPRITES.LVL` is stored as a series of `[uint16 size][raw
+     deflate]` blocks. Its 81 MOBDs are byte-identical to the full game's.
+
+  The wallpaper's `setup.ps1` searches the same places. The page itself (`battle/src/gamefiles/`)
+  accepts `SPRITES.LVL`, `KKND_XT.EXE`, `data1.cab` or a ZIP holding one of them.
 * **Palette, unit definitions, maps:** [OpenKrush](https://github.com/IceReaper/OpenKrush) (GPL-3.0),
   `mods/openkrush_gen1`:
   * `core/rules/palette.png`: the 256-colour palette for Gen1 (KKnD 1) sprites
@@ -34,6 +53,13 @@ content/                   (git-ignored) game files copied by extract-assets.ps1
 
 The tools clone OpenKrush into `.cache/openkrush` when they need it. Pass `--openkrush PATH` to use
 an existing checkout.
+
+### The LVL archive
+
+`SPRITES.LVL` starts with `DATA` and a big-endian uint32 size; the rest is the data block. Its first
+int32 points to a type table of `{type: char[4], list offset: int32}` entries; each list holds int32
+file offsets (0 = empty slot). A file ends where the next one starts. `0.mobd` is the first MOBD in
+the list; OpenKrush's `sprites.lvl.yaml` maps these to names.
 
 ## The MOBD format
 
@@ -62,13 +88,11 @@ documented.
 Images are RLE-compressed rows of palette indices (index 0 = transparent). Gen1 sprites use the
 external palette, and index 177 (near black) is used for drop shadows.
 
-### Absolute offsets and base recovery
+### Absolute offsets
 
 Pointers inside a MOBD are **absolute offsets into the `SPRITES.LVL` data block**, not offsets within
-the `.mobd` file. A standalone `.mobd` therefore cannot be parsed until you know where it originally sat.
-`tools/mobd.py:find_base` recovers this: the first animation's first frame pointer minus that frame
-record's position in the file gives the base. It tries each candidate and keeps the one whose full parse
-succeeds with the expected frame count.
+the MOBD itself, so a MOBD is parsed in place inside the data block: `mobd.parse(data[off:off + size],
+off)` in Python, `parseMobd(data, off, size)` in JavaScript.
 
 ### What the old extractor got wrong
 
@@ -80,7 +104,7 @@ succeeds with the expected frame count.
 
 ## `{Name}_frames.json`
 
-Written next to each `.mobd` by `extract_mobd.py`:
+Written next to each extracted `.mobd` by `extract_mobd.py`:
 
 ```json
 {
@@ -111,14 +135,19 @@ turret frame's own point 0.
 
 ## Battle asset pipeline (`tools/build_battle_assets.py`)
 
-Writes everything the wallpaper loads into `battle/public/assets`:
+Writes everything the wallpaper loads as files into `battle/public/assets`. None of it is original
+game graphics:
 
-* **`sprites/<Stem>.png` + `.json`:** one Phaser atlas per MOBD. Frames are trimmed and packed into a
-  power-of-two texture. Each frame's `sourceSize` is an even square centred on its (whole-pixel) origin,
-  so a sprite with origin 0.5 puts the MOBD origin exactly at its position. Unit sprites also get a
-  `<Stem>_red` variant (team colour: palette indices 8–13, blue, are remapped to 24–29, red). Shadow
-  pixels touching the outside become translucent black.
-* **`sprites/<Stem>.points.json`:** MOBD points per frame, `{frame: [[id, x, y], ...]}`.
+* **Game sprites are not files.** `units.json` lists them (`sprites.<Stem>.mobd: true`) along with the
+  palette and the LVL file names, and the page builds them at startup from the player's
+  `SPRITES.LVL` (`battle/src/gamefiles/`): one Phaser atlas per MOBD, frames trimmed and packed into a
+  power-of-two texture. Each frame's `sourceSize` is an even square centred on its (whole-pixel)
+  origin, so a sprite with origin 0.5 puts the MOBD origin exactly at its position. Unit sprites also
+  get a `<Stem>_red` variant (team colour: palette indices 8–13, blue, are remapped to 24–29, red).
+  Shadow pixels touching the outside become translucent black. MOBD points per frame go into the
+  Phaser JSON cache as `pts_<Stem>`, `{frame: [[id, x, y], ...]}`. The JavaScript decoder and packer
+  produce the same frames and atlases as `tools/mobd.py` and `tools/atlas.py`, byte for byte.
+* **`sprites/InfDeath*.png` + `.json`:** OpenKrush's fan-made infantry death sheets, same atlas layout.
 * **`units.json`:**
   * `units`: per unit, the `seq` sequences (idle / move / aim / shoot / turret, as
     `{sprite, start, length, stride, facings, tick}`), `hp`, `speed` (px/s), turn speeds, `muzzle`,
@@ -138,10 +167,10 @@ A frame index for facing `d` (0–15, clockwise from north) and step `s` of a se
 ## Extractor options
 
 ```
-python extract_mobd.py                  # from content/sprites.lvl
-python extract_mobd.py --from-repo      # from the .mobd files in units/, effects/, ui/ (no game needed)
+python extract_mobd.py                  # PNG frames + metadata into units/, effects/, ui/
 python extract_mobd.py --metadata-only  # JSON only
 python extract_mobd.py --openkrush PATH # use an existing OpenKrush checkout for palette / file names
 ```
 
-`content/palette.png` and `content/sprites.lvl.yaml` are used if present; otherwise they come from OpenKrush.
+`content/palette.png` and `content/sprites.lvl.yaml` are used if present; otherwise they come from
+OpenKrush. The output is for your own use: it is git-ignored, please don't publish it.

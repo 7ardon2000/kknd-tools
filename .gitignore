@@ -1,7 +1,15 @@
-# Game files copied by extract-assets.ps1
+# Original KKnD game files and anything extracted from them: never commit these.
+# (Everything here reads them from the player's own copy of the game; see tools/gamedata.py.)
 content/
+units/
+effects/
+ui/
+*.lvl
+*.LVL
+*.mobd
+battle/public/gamefiles/
 
-# Extracted PNG frames (regenerate with extract_mobd.py)
+# Extracted PNG frames
 *.png
 
 # Python
@@ -18,5 +26,6 @@ venv/
 .cache/
 battle/node_modules/
 battle/dist/
+battle/release/
 battle/public/assets/
 battle/*.zip

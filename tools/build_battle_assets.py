@@ -2,14 +2,15 @@
 """
 Build everything the KKnD battle wallpaper (battle/) needs:
 
-  battle/public/assets/sprites/<Stem>[_red].png/.json   Phaser atlases (pivot-correct, with MOBD points)
+  battle/public/assets/sprites/InfDeath*.png/.json       OpenKrush's infantry death animations
   battle/public/assets/units.json                         unit / weapon / effect database
   battle/public/assets/maps/<id>.png/.json                rendered maps + passability + decor
+  battle/public/gamefiles/SPRITES.LVL                     your own game file, for `npm run dev` (git-ignored)
 
-Sources:
-  * the raw .mobd files committed in this repo (units/, effects/)
-  * OpenKrush (https://github.com/IceReaper/OpenKrush, GPL-3.0) for the palette, unit sequence
-    layouts, weapon stats, tilesets and maps. Cloned to .cache/openkrush if --openkrush is not given.
+No original game graphics are written here: the page decodes the unit and effect sprites at
+runtime from the player's own SPRITES.LVL (see battle/src/gamefiles/). Everything below comes from
+OpenKrush (https://github.com/IceReaper/OpenKrush, GPL-3.0): palette, unit sequence layouts,
+weapon stats, tilesets, maps and fan-made art. Cloned to .cache/openkrush if --openkrush is not given.
 
 Usage: python tools/build_battle_assets.py [--openkrush PATH] [--maps all|id1,id2]
 """
@@ -27,7 +28,6 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).parent))
 import atlas  # noqa: E402
 import miniyaml as my  # noqa: E402
-import mobd  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 OUT = REPO / "battle" / "public" / "assets"
@@ -61,49 +61,6 @@ def ensure_openkrush(path):
 
 # --------------------------------------------------------------------------------------------
 # MOBD loading
-
-
-def find_mobd_files():
-    files = {}
-    for p in glob.glob(str(REPO / "units" / "*" / "*.mobd")) + glob.glob(str(REPO / "effects" / "*" / "*.mobd")):
-        files[Path(p).stem.lower()] = Path(p)
-    return files
-
-
-_mobd_cache = {}
-
-
-def load_frames(path):
-    """Return the flattened frame list (rotational then simple), as OpenKrush indexes it."""
-    if path in _mobd_cache:
-        return _mobd_cache[path]
-    data = path.read_bytes()
-    meta = path.with_name(path.stem + "_frames.json")
-    expected = json.loads(meta.read_text())["total_frames"] if meta.exists() else None
-    _, rot, simple = mobd.find_base(data, expected)
-    frames = [f for a in rot + simple for f in a.frames]
-    _mobd_cache[path] = frames
-    return frames
-
-
-def export_sprite(stem, path, palette, out_dir, team_variants):
-    frames = load_frames(path)
-    variants = [("", None)] + ([("_red", atlas.TEAM_REMAP)] if team_variants else [])
-    for suffix, remap in variants:
-        imgs = []
-        cache = {}
-        for i, f in enumerate(frames):
-            key = (f.image_key, remap is not None)
-            if key not in cache:
-                cache[key] = atlas.to_rgba(f.w, f.h, f.pixels, palette, remap)
-            imgs.append((str(i), cache[key], f.ox, f.oy))
-        img, js = atlas.pack(imgs)
-        js["meta"]["image"] = f"{stem}{suffix}.png"
-        img.save(out_dir / f"{stem}{suffix}.png", optimize=True)
-        (out_dir / f"{stem}{suffix}.json").write_text(json.dumps(js, separators=(",", ":")))
-    points = {str(i): [[p["id"], p["x"], p["y"]] for p in f.points] for i, f in enumerate(frames) if f.points}
-    (out_dir / f"{stem}.points.json").write_text(json.dumps(points, separators=(",", ":")))
-    return len(frames)
 
 
 def png_sheet_meta(path):
@@ -414,6 +371,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--openkrush", help="path to an OpenKrush checkout")
     ap.add_argument("--maps", default="all", help="'all', 'none', or comma-separated map ids")
+    ap.add_argument("--no-gamefiles", action="store_true",
+                    help="do not copy your SPRITES.LVL to battle/public/gamefiles/ (for `npm run dev`)")
     args = ap.parse_args()
 
     ok = ensure_openkrush(args.openkrush)
@@ -434,7 +393,10 @@ def main():
         maps_index = maprender.build_all(ok, OUT / "maps", palette, ids)
         extra = maps_index["extraSprites"]
 
-    mobds = find_mobd_files()
+    # names of the files inside SPRITES.LVL (OpenKrush data), so the page can find the MOBDs
+    import gamedata
+    lvl_names = gamedata.lvl_names(ok / "mods" / "openkrush_gen1" / "archives" / "sprites.lvl.yaml")
+    mobd_names = {v[:-5].lower(): v[:-5] for v in lvl_names.values() if v.endswith(".mobd")}
     team_stems = set()
     plain_stems = {"Extras", "Shrapnels", "Flame", "Oil"} | set(extra)
     for u in units.values():
@@ -452,29 +414,37 @@ def main():
         team_stems.add(a["bomb"]["sprite"])
     plain_stems -= team_stems
 
+    # game sprites are NOT exported: the page decodes them from the player's own SPRITES.LVL
     sprites = {}
     for stem in sorted(team_stems | plain_stems):
-        path = mobds.get(stem.lower())
-        if path is None:
+        if stem.lower() not in mobd_names:
             print("  missing MOBD", stem)
             continue
-        n = export_sprite(stem, path, palette, OUT / "sprites", stem in team_stems)
-        sprites[stem] = {"frames": n, "team": stem in team_stems}
-        print(f"  sprite {stem}: {n} frames{' (+red)' if stem in team_stems else ''}")
+        sprites[stem] = {"mobd": True, "team": stem in team_stems}
 
     # drop units whose sprites failed
     units = {k: u for k, u in units.items() if all(sq["sprite"] in sprites for sq in u["seq"].values())}
 
     effects = {k: {"sprite": s, "start": st, "length": ln, "tick": tk} for k, (s, st, ln, tk) in EFFECT_NAMES.items()}
     sprites.update(export_death_sheets(ok, palette, OUT / "sprites", effects))
-    db = {"sprites": sprites, "effects": effects, "units": units, "aircraft": aircraft}
+    db = {"sprites": sprites, "effects": effects, "units": units, "aircraft": aircraft,
+          # for decoding SPRITES.LVL in the page: OpenKrush's palette and LVL file names
+          "palette": [c for rgb in palette for c in rgb], "lvlNames": lvl_names}
 
     if maps_index:
         db["maps"] = maps_index["list"]
         db["tilesets"] = maps_index["tilesets"]
 
     (OUT / "units.json").write_text(json.dumps(db, indent=1))
-    print(f"Wrote {len(units)} units, {len(sprites)} sprites to {OUT}")
+
+    if not args.no_gamefiles:
+        # for local development only: git-ignored, and removed again by `npm run package`
+        raw, source = gamedata.sprites_lvl()
+        dev = REPO / "battle" / "public" / "gamefiles"
+        dev.mkdir(parents=True, exist_ok=True)
+        (dev / "SPRITES.LVL").write_bytes(raw)
+        print(f"Copied SPRITES.LVL from {source} to {dev} (local use only, never committed or packaged)")
+    print(f"Wrote {len(units)} units, {len(sprites)} sprites ({sum(1 for v in sprites.values() if v.get('mobd'))} from SPRITES.LVL at runtime) to {OUT}")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
-// Turn battle/dist into a wallpaper package for Lively Wallpaper and Wallpaper Engine.
-// Usage (from battle/): npm run package   -> dist/ + kknd-battle-wallpaper.zip
+// Turn battle/dist into the release download: the wallpaper (for Lively Wallpaper and Wallpaper
+// Engine) WITHOUT any original game files, plus Setup.cmd, which finds the player's own KKnD files
+// and builds the final wallpaper on their PC.
+// Usage (from battle/): npm run package   -> release/ + kknd-battle-wallpaper.zip
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
@@ -9,6 +11,19 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'dist');
 const db = JSON.parse(fs.readFileSync(path.join(root, 'public', 'assets', 'units.json'), 'utf8'));
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+
+// public/gamefiles/ holds the developer's own SPRITES.LVL for `npm run dev`: never ship it
+fs.rmSync(path.join(dist, 'gamefiles'), { recursive: true, force: true });
+const forbidden = [];
+(function walk(dir) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walk(p);
+    else if (/\.(lvl|slv|mobd|exe|cab)$/i.test(e.name)) forbidden.push(p);
+    else if (path.basename(dir) === 'sprites' && !e.name.startsWith('InfDeath')) forbidden.push(p);
+  }
+})(dist);
+if (forbidden.length) throw new Error(`game files in dist/, refusing to package:\n${forbidden.join('\n')}`);
 
 // keep in sync with src/wallpaper.js
 const TEAM_LABELS = ['Survivors vs Evolved', 'Mixed vs Mixed', 'Survivors civil war', 'Evolved civil war'];
@@ -79,35 +94,58 @@ fs.writeFileSync(path.join(dist, 'project.json'), JSON.stringify({
   version: pkg.version,
 }, null, 2));
 
-fs.writeFileSync(path.join(dist, 'README.txt'), `KKnD Battle - live wallpaper (v${pkg.version})
+const readme = `KKnD Battle - live wallpaper (v${pkg.version})
 ==========================================
 
 An endless KKnD battle on the classic maps: Survivors vs Evolved, reinforcements keep coming.
 
-Lively Wallpaper (Windows, free - https://www.rocksdanister.com/lively/)
-  Drag this zip onto the Lively window, select the wallpaper, then use "Customise" to pick
-  the map, armies, zoom, number of units, lethality, frame rate...
+This download contains NO original KKnD files. The wallpaper uses the graphics from your own copy
+of the game: KKnD Xtreme (GOG or Steam), a KKnD / KKnD Xtreme CD, or the free official demo.
 
-Wallpaper Engine
-  Extract the zip, then "Open Wallpaper" > "Open from File" and choose project.json.
+Install
+  1. Extract this zip (right-click > Extract All).
+  2. Double-click Setup.cmd. It finds your game (GOG, Steam, CD) by itself. No game? It offers to
+     download the free official KKnD Xtreme demo from archive.org, or lets you pick the file
+     (SPRITES.LVL, in the game's LEVELS\\640 folder) yourself.
+  3. Setup makes "KKnD Battle Wallpaper.zip" next to Setup.cmd.
+     Lively Wallpaper (free, https://www.rocksdanister.com/lively/): drag that zip onto the Lively
+       window, select the wallpaper, then use "Customise" for map, armies, zoom, units, speed...
+     Wallpaper Engine: Open Wallpaper > Open from File > choose wallpaper\\project.json.
+  The zip Setup makes contains your own game file: keep it for yourself, please don't share it.
 
 Browser
-  Serve the extracted folder with a local web server (e.g. "npx serve .") and open it.
-  Opening index.html directly from disk does not work (browsers block file:// loading).
+  Serve the wallpaper folder with a local web server (e.g. "npx serve wallpaper") and open it.
+  Without Setup it asks for SPRITES.LVL or KKND_XT.EXE once and remembers it.
 
 Credits
-  KKnD (Krush Kill 'n Destroy) (c) Beam Software / Melbourne House. Original game graphics
-  belong to their owners; this is a free, non-commercial fan project for the KKnD community.
-  Unit, weapon and map data, palette and tilesets from OpenKrush (https://github.com/IceReaper/OpenKrush, GPL-3.0).
-  Infantry burn/explode death animations by Dzierzan (OpenKrush).
-  Built with Phaser 3. Source: https://github.com/7ardon2000/kknd-tools
-`);
+  KKnD (Krush Kill 'n Destroy) (c) Beam Software / Melbourne House. Free, non-commercial fan project.
+  Game files are read in the same way as OpenKrush (https://github.com/IceReaper/OpenKrush, GPL-3.0),
+  by IceReaper and the OpenKrush team, which also provides the unit, weapon and map data, palette,
+  tilesets and the infantry death animations (Dzierzan). Built with Phaser 3.
+  Source: https://github.com/7ardon2000/kknd-tools
+`;
+fs.writeFileSync(path.join(dist, 'README.txt'), readme);
+
+// release folder: README.txt, Setup.cmd, setup/setup.ps1, wallpaper/ (= dist)
+const release = path.join(root, 'release');
+fs.rmSync(release, { recursive: true, force: true });
+fs.mkdirSync(path.join(release, 'setup'), { recursive: true });
+fs.cpSync(dist, path.join(release, 'wallpaper'), { recursive: true });
+fs.writeFileSync(path.join(release, 'README.txt'), readme.replace(/\n/g, '\r\n'));
+fs.copyFileSync(path.join(root, 'setup', 'Setup.cmd'), path.join(release, 'Setup.cmd'));
+fs.copyFileSync(path.join(root, 'setup', 'setup.ps1'), path.join(release, 'setup', 'setup.ps1'));
 
 const zip = path.join(root, 'kknd-battle-wallpaper.zip');
 fs.rmSync(zip, { force: true });
 if (process.platform === 'win32') {
-  execFileSync('powershell', ['-NoProfile', '-Command', `Compress-Archive -Path '${dist}\\*' -DestinationPath '${zip}' -Force`], { stdio: 'inherit' });
+  // ZipArchive with "/" separators (Compress-Archive in Windows PowerShell writes backslashes)
+  const ps = `Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+$src = '${release}'; $z = [IO.Compression.ZipFile]::Open('${zip}', 'Create')
+try { foreach ($f in Get-ChildItem -LiteralPath $src -Recurse -File) {
+  $n = $f.FullName.Substring($src.Length + 1).Replace('\\', '/')
+  [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($z, $f.FullName, $n, 'Optimal') } } finally { $z.Dispose() }`;
+  execFileSync('powershell', ['-NoProfile', '-Command', ps], { stdio: 'inherit' });
 } else {
-  execFileSync('zip', ['-qr', zip, '.'], { cwd: dist, stdio: 'inherit' });
+  execFileSync('zip', ['-qr', zip, '.'], { cwd: release, stdio: 'inherit' });
 }
 console.log(`Packaged ${path.relative(root, zip)} (${(fs.statSync(zip).size / 1e6).toFixed(1)} MB)`);

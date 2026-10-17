@@ -3,10 +3,10 @@ KKnD1 (Gen1) / KKnD2 (Gen2) MOBD sprite parser.
 
 Port of the OpenKrush reader (OpenRA.Mods.OpenKrush/Assets/FileFormats/Mobd*.cs).
 
-A MOBD stores pointers that are absolute offsets into the SPRITES.LVL data block,
-not offsets relative to the .mobd file. When parsing a standalone .mobd that was
-cut out of the LVL we therefore need its original base offset; `find_base` recovers
-it by trying candidate bases until the structure parses cleanly.
+A MOBD stores pointers that are absolute offsets into the SPRITES.LVL data block (the
+contents after its DATA header), not offsets relative to the .mobd file, so it is
+parsed in place: parse(lvl_data[offset:offset + size], offset). See gamedata.lvl_index.
+battle/src/gamefiles/mobd.js is a JavaScript port of this file.
 """
 
 import struct
@@ -271,36 +271,3 @@ def parse(data, base):
 
     simple = [_read_animation(v, off) for off in anim_offsets]
     return rotational, simple
-
-
-def find_base(data, expected_frames=None):
-    """Recover the absolute LVL offset a standalone .mobd was cut from.
-
-    The first animation record starts at file offset 0 and is (unk, frame_ptr...).
-    Frame pointers are absolute, so base = frame_ptr - rel for some frame record
-    position rel inside the file. We try each candidate and keep the one that parses.
-    """
-    first_ptr = struct.unpack_from("<i", data, 4)[0]
-    if first_ptr <= 0:
-        raise ValueError("unexpected MOBD header")
-    # Frame records are 28 bytes and sit after the animation tables, so rel is
-    # 4-byte aligned and within the file.
-    best = None
-    for rel in range(8, len(data) - 28, 4):
-        base = first_ptr - rel
-        if base < 0:
-            break
-        try:
-            rot, simple = parse(data, base)
-        except (ValueError, struct.error, IndexError):
-            continue
-        n = sum(len(a.frames) for a in rot + simple)
-        if n == 0:
-            continue
-        if expected_frames is None or n == expected_frames:
-            return base, rot, simple
-        if best is None:
-            best = (base, rot, simple)
-    if best:
-        return best
-    raise ValueError("could not recover MOBD base offset")

@@ -16,10 +16,12 @@ GROUND_TERRAIN = {"Clear", "Sand", "Dirt", "Grass"}
 
 
 def png_frames(path):
-    """Read OpenRA PngSheet `Frame[i]` metadata: {i: (x, y, w, h, offx, offy)}."""
+    """OpenRA PngSheet frames {i: (x, y, w, h, offx, offy)}, from per-frame `Frame[i]` metadata or,
+    for sheets that are a plain grid, from `FrameSize` / `Offset` / `FrameAmount`."""
     data = Path(path).read_bytes()
     pos = 8
     frames = {}
+    meta = {}
     while pos < len(data):
         ln, = struct.unpack(">I", data[pos:pos + 4])
         kind = data[pos + 4:pos + 8]
@@ -33,7 +35,17 @@ def png_frames(path):
                 x, y, w, h = (int(n) for n in rect.split(","))
                 ox, oy = (int(float(n)) for n in (off or "0,0").split(","))
                 frames[i] = (x, y, w, h, ox, oy)
+            else:
+                meta[k] = v.decode("latin1")
         pos += 12 + ln
+    if not frames and "FrameSize" in meta:
+        fw, fh = (int(n) for n in meta["FrameSize"].split(","))
+        ox, oy = (int(float(n)) for n in meta.get("Offset", "0,0").split(",")[:2])
+        width, height = Image.open(path).size
+        cols = max(1, width // fw)
+        count = int(meta.get("FrameAmount", cols * max(1, height // fh)))
+        for i in range(count):
+            frames[i] = ((i % cols) * fw, (i // cols) * fh, fw, fh, ox, oy)
     return frames
 
 
@@ -175,7 +187,11 @@ def build_all(ok, out_dir, palette, only_ids=None):
         decor_imgs = {}
         decor = []
         spawns = []
-        for a in (nodes.get("Actors").children if nodes.get("Actors") else []):
+        actors = nodes.get("Actors").children if nodes.get("Actors") else []
+        # walls pick their piece from their neighbours (OpenRA: up 1, right 2, down 4, left 8)
+        walls = {(a.value, tuple(int(v) for v in a.val("Location").split(","))) for a in actors
+                 if "_wall_" in a.value and a.val("Location")}
+        for a in actors:
             atype = a.value
             loc = a.val("Location")
             if not loc:
@@ -215,6 +231,10 @@ def build_all(ok, out_dir, palette, only_ids=None):
                 cx += ox
                 cy += oy
             start = int(idle.val("Start", "0"))
+            if "_wall_" in atype and int(idle.val("Length", "1") or 1) == 16:
+                wx, wy = lx + bx, ly + by
+                start += sum(bit for bit, (dx, dy) in ((1, (0, -1)), (2, (1, 0)), (4, (0, 1)), (8, (-1, 0)))
+                             if (atype, (wx + dx, wy + dy)) in walls)
             entry = {"x": round(cx, 1), "y": round(cy, 1), "z": round(cy + dims[1] * TILE / 2 - TILE / 2, 1)}
             if ".mobd" in idle.value:
                 stem = idle.value.split("|")[-1].replace(".mobd", "")

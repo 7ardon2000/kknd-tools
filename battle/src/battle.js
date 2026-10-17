@@ -6,6 +6,7 @@ import { DEPTH, Effects } from './effects.js';
 import { Grid } from './grid.js';
 import { Terrain } from './terrain.js';
 import { SpatialHash } from './spatial.js';
+import { buildSprites, getSpritesLvl } from './gamefiles/index.js';
 import { fname, SpriteBank } from './sprites.js';
 import { Unit } from './unit.js';
 import { cropWorld, MARGIN, pickRegion } from './world.js';
@@ -41,20 +42,27 @@ export class BootScene extends Phaser.Scene {
     this.load.json('db', `${ASSETS}units.json`);
     this.load.once('filecomplete-json-db', () => {
       const db = this.cache.json.get('db');
+      // only the fan-made sheets are files; game sprites are decoded from the player's SPRITES.LVL
       for (const [stem, info] of Object.entries(db.sprites)) {
+        if (info.mobd) continue;
         this.load.atlas(stem, `${ASSETS}sprites/${stem}.png`, `${ASSETS}sprites/${stem}.json`);
         if (info.team) this.load.atlas(`${stem}_red`, `${ASSETS}sprites/${stem}_red.png`, `${ASSETS}sprites/${stem}_red.json`);
         this.load.json(`pts_${stem}`, `${ASSETS}sprites/${stem}.points.json`);
       }
     });
-    const bar = this.add.graphics();
-    this.load.on('progress', (p) => {
-      const { width, height } = this.scale;
-      bar.clear().fillStyle(0x8a6a3a).fillRect(width * 0.3, height / 2 - 3, width * 0.4 * p, 6);
-    });
+    this.bar = this.add.graphics();
+    this.load.on('progress', (p) => this.progress(p * 0.3));
   }
 
-  create() {
+  progress(p) {
+    const { width, height } = this.scale;
+    this.bar.clear().fillStyle(0x8a6a3a).fillRect(width * 0.3, height / 2 - 3, width * 0.4 * p, 6);
+  }
+
+  async create() {
+    const db = this.cache.json.get('db');
+    const lvl = await getSpritesLvl(db);
+    await buildSprites(this, db, lvl, (p) => this.progress(0.3 + p * 0.7));
     this.scene.start('battle');
   }
 }

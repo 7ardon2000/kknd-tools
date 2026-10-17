@@ -4,26 +4,32 @@ Fan-made tools for **KKnD** (Krush Kill 'n Destroy, 1997): extract the game's sp
 alignment data, and run an endless self-playing KKnD battle as a live desktop wallpaper.
 
 > Free, non-commercial fan project for the KKnD community. Not affiliated with Beam Software,
-> Melbourne House or the rights holders. Single-player / offline fun only.
+> Melbourne House or the rights holders.
+
+**No original game files are included.** Like [OpenKrush](https://github.com/IceReaper/OpenKrush),
+everything here reads the graphics from **your own copy** of the game: KKnD Xtreme from
+[GOG](https://www.gog.com/game/krush_kill_n_destroy_xtreme) or Steam, a KKnD / KKnD Xtreme CD, or the
+free official [KKnD Xtreme demo](https://archive.org/details/KKNDXT). The tools find an installed game
+automatically, the same way OpenKrush does.
 
 ## What's here
 
 | | |
 |---|---|
 | **[battle/](battle/README.md)** | **KKnD Battle**, a live wallpaper for Lively Wallpaper, Wallpaper Engine or a browser. Screen-sized battlefields from the classic maps, Survivors vs Evolved, real weapons and effects, endless reinforcements, a new battlefield every 15 minutes. |
-| `extract_mobd.py` | Extracts KKnD `.mobd` sprites to PNG frames plus `{Name}_frames.json` metadata (origins, animation structure, weapon/turret points). |
-| `extract-assets.ps1` | Copies `SPRITES.LVL` from a KKnD Xtreme install and runs the extractor. |
-| `tools/` | The Python pipeline: MOBD parser, sprite atlas packer, map renderer, battle asset builder. |
-| `units/`, `effects/`, `ui/` | The raw `.mobd` files from KKnD Xtreme's `SPRITES.LVL`, with their frame metadata. |
+| `extract_mobd.py` | Extracts KKnD's `.mobd` sprites from your `SPRITES.LVL` to PNG frames plus `{Name}_frames.json` metadata (origins, animation structure, weapon/turret points). |
+| `tools/` | The Python pipeline: game file finder (`gamedata.py`), MOBD parser, sprite atlas packer, map builder, battle asset builder. |
 | [documentation.md](documentation.md) | Technical reference: file formats, metadata, how the pipeline works. |
 
 ## Quick start
 
 **Just want the wallpaper?**
-1. Install [Lively Wallpaper](https://apps.microsoft.com/detail/9ntm2qc6qws7) (free, Microsoft Store).
-2. Download **[kknd-battle-wallpaper.zip](https://github.com/7ardon2000/kknd-tools/releases/latest/download/kknd-battle-wallpaper.zip)**
-   (all versions: [Releases](https://github.com/7ardon2000/kknd-tools/releases)).
-3. Drag the zip onto the Lively window and click it.
+1. Download **[kknd-battle-wallpaper.zip](https://github.com/7ardon2000/kknd-tools/releases/latest/download/kknd-battle-wallpaper.zip)**
+   and extract it (right-click → Extract All).
+2. Double-click **`Setup.cmd`**. It finds your KKnD (GOG, Steam, CD) by itself. No game? It offers to
+   download the free official demo, or lets you choose `SPRITES.LVL` yourself.
+3. Drag the **`KKnD Battle Wallpaper.zip`** it creates onto [Lively Wallpaper](https://www.rocksdanister.com/lively/)
+   (free) and click it.
 
 See [battle/README.md](battle/README.md) for Wallpaper Engine, browser use and all settings.
 
@@ -31,19 +37,23 @@ See [battle/README.md](battle/README.md) for Wallpaper Engine, browser use and a
 
 ```bash
 npm run setup      # Python + Node dependencies
-npm run assets     # build sprites, unit data and maps (downloads OpenKrush data on first run)
+npm run assets     # unit data and maps from OpenKrush (cloned on first run), plus your SPRITES.LVL for dev
 npm run dev        # preview at http://localhost:5180
-npm run package    # -> battle/kknd-battle-wallpaper.zip
+npm run package    # -> battle/kknd-battle-wallpaper.zip (no game files inside)
 ```
 
 **Extract sprites as PNGs:**
 
 ```bash
-python extract_mobd.py --from-repo   # from the .mobd files in this repo, no game needed
-.\extract-assets.ps1                 # or from your KKnD Xtreme install (default C:\Games\KKND Xtreme)
+python extract_mobd.py                  # PNG frames + metadata into units/, effects/, ui/
+python extract_mobd.py --metadata-only  # metadata only
 ```
 
-PNGs land next to each `.mobd` file (for example `units/swat/SWAT_0000.png`) and are git-ignored.
+The game files are looked up in this order (see [`tools/gamedata.py`](tools/gamedata.py)):
+`content/sprites.lvl`, the folder in the `KKND_XTREME` environment variable, Steam (app 1292170),
+GOG (game 1207659107), common install folders, a KKnD / KKnD Xtreme CD, and finally the free demo,
+downloaded once from archive.org into `.cache/` (SHA-1 checked). Everything extracted stays on your
+computer: `units/`, `effects/`, `ui/` and `content/` are git-ignored. Please don't publish them.
 
 ## What was wrong before, and what fixed it
 
@@ -53,8 +63,7 @@ other effects by hand. That never worked reliably. Three causes were found and f
 1. **The weapon point data was decoded wrongly.** Every MOBD frame stores where its gun muzzle (or turret
    mount) is. The old extractor guessed that list's format, so every `points` entry in the metadata was
    garbage, and effects had to be nudged by hand. The real format is a list of
-   `{id, x, y, z}` records (int32, x/y in 1/256 px) ending with `0xFFFFFFFF`. All committed
-   `*_frames.json` files have been regenerated with correct points.
+   `{id, x, y, z}` records (int32, x/y in 1/256 px) ending with `0xFFFFFFFF`.
 2. **Frame origins were treated as unsigned and clamped to the image.** Origins are signed and often lie
    outside the image. A muzzle flash, for example, is anchored at its base, outside its own pixels. The
    old viewer clamped them, so flashes always appeared in the wrong place.
@@ -63,23 +72,21 @@ other effects by hand. That never worked reliably. Three causes were found and f
    weapons and effects from [OpenKrush](https://github.com/IceReaper/OpenKrush), the open-source KKnD
    engine.
 
-The parser is now a faithful port of OpenKrush's MOBD reader (`tools/mobd.py`). It also handles a quirk
-of the `.mobd` files in this repo: their internal pointers are absolute offsets into the original
-`SPRITES.LVL`, so each file's original position is recovered automatically. That means the sprites
-decode without the game installed. Details are in [documentation.md](documentation.md).
-
-The old manual alignment viewer (`viewer/`) has been removed; the battle app supersedes it. It remains
-in the git history (commit `1818a50`) if you need it.
+The parser is a faithful port of OpenKrush's MOBD reader, in Python (`tools/mobd.py`) and in
+JavaScript for the wallpaper (`battle/src/gamefiles/mobd.js`). Details are in
+[documentation.md](documentation.md).
 
 ## Requirements
 
 * Python 3 with Pillow (`pip install -r requirements.txt`)
 * Node.js 18+ (for the battle app)
 * git (the build downloads OpenKrush's data on first run)
-* Optional: KKnD Xtreme ([Steam](https://store.steampowered.com/app/281030/KKND_Xtreme/)), only needed
-  to re-extract from the original game files
+* KKnD or KKnD Xtreme, or the free demo (downloaded automatically when no game is found)
 
-## License
+## License and credits
 
-The code is GPL-3.0 (see [LICENSE](LICENSE)); the MOBD parser is a port of GPL-3.0 OpenKrush code.
-KKnD's graphics and data belong to their owners. Personal, non-commercial fan use only.
+The code is GPL-3.0 (see [LICENSE](LICENSE)). The MOBD parser and the game file installers follow
+GPL-3.0 code from [OpenKrush](https://github.com/IceReaper/OpenKrush) by IceReaper and the OpenKrush
+team, and its InstallShield reader follows [OpenRA](https://github.com/OpenRA/OpenRA). Unit, weapon and
+map data, the palette, tilesets and the infantry death animations (Dzierzan) come from OpenKrush.
+KKnD's graphics belong to their owners and are never stored in this repository.
