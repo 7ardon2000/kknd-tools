@@ -10,7 +10,7 @@ alignment data, and run an endless self-playing KKnD battle as a live desktop wa
 
 | | |
 |---|---|
-| **[battle/](battle/README.md)** | **KKnD Battle**, a live wallpaper for Lively Wallpaper, Wallpaper Engine or a browser. Classic maps stitched into one large battlefield, Survivors vs Evolved, real weapons and effects, endless reinforcements, a slowly panning camera. |
+| **[battle/](battle/README.md)** | **KKnD Battle**, a live wallpaper for Lively Wallpaper, Wallpaper Engine or a browser. Screen-sized battlefields from the classic maps, Survivors vs Evolved, real weapons and effects, endless reinforcements, a new battlefield every 15 minutes. |
 | `extract_mobd.py` | Extracts KKnD `.mobd` sprites to PNG frames plus `{Name}_frames.json` metadata (origins, animation structure, weapon/turret points). |
 | `extract-assets.ps1` | Copies `SPRITES.LVL` from a KKnD Xtreme install and runs the extractor. |
 | `tools/` | The Python pipeline: MOBD parser, sprite atlas packer, map renderer, battle asset builder. |

@@ -6,7 +6,6 @@
  */
 import { CONFIG } from './config.js';
 
-export const WORLD_PRESETS = ['3x2', '2x2', '3x1', '4x2', '2x1', '1x1'];
 
 export const TEAM_PRESETS = [
   { label: 'Survivors vs Evolved', teams: ['survivors', 'evolved'] },
@@ -16,8 +15,9 @@ export const TEAM_PRESETS = [
 ];
 
 /** Settings that need a fresh battle; the rest apply immediately. */
-const RESTART = new Set(['map', 'world', 'teams', 'zoom', 'units', 'vehicles']);
-const NEW_WORLD = new Set(['map', 'world']);
+const RESTART = new Set(['map', 'teams', 'zoom', 'units', 'vehicles']);
+// these change the battlefield itself (zoom changes how many cells fit on screen)
+const NEW_WORLD = new Set(['map', 'zoom']);
 
 export function installWallpaperHooks(game) {
   let restartTimer = null;
@@ -45,9 +45,6 @@ export function installWallpaperHooks(game) {
         CONFIG.map = idx <= 0 || !list[idx - 1] ? 'random' : list[idx - 1].id;
         break;
       }
-      case 'world':
-        CONFIG.world = WORLD_PRESETS[Number(value)] || WORLD_PRESETS[0];
-        break;
       case 'teams':
         CONFIG.teams = (TEAM_PRESETS[Number(value)] || TEAM_PRESETS[0]).teams;
         break;
@@ -60,7 +57,6 @@ export function installWallpaperHooks(game) {
       case 'corpses': CONFIG.corpseTime = Number(value); break;
       case 'airstrike': CONFIG.airstrike = Number(value); scene()?.resetAirTimer?.(); break;
       case 'speed': CONFIG.speed = Number(value); break;
-      case 'pan': CONFIG.pan = Number(value); break;
       case 'fps':
         CONFIG.fps = Number(value) === 1 ? 30 : 60;
         game.loop.targetFps = CONFIG.fps;

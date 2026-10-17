@@ -207,7 +207,7 @@ export class Terrain {
       const my = (view.y + view.h / 2) / CHUNK;
       missing.sort((p, q) => Math.hypot(p[0] + 0.5 - mx, p[1] + 0.5 - my) - Math.hypot(q[0] + 0.5 - mx, q[1] + 0.5 - my));
       // one chunk per frame (~3 ms) keeps frames even; a fresh world fills in over a few frames
-      // behind the fade, and while roaming the margin bakes chunks long before they scroll in
+      // behind the fade-in
       const start = performance.now();
       for (const [cx, cy] of missing) {
         this.bake(cx, cy);

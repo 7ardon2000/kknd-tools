@@ -2,15 +2,13 @@ import Phaser from 'phaser';
 import { Airstrike } from './airstrike.js';
 import { CONFIG } from './config.js';
 import { centerSnapped } from './snap.js';
-import { Hotspots } from './hotspots.js';
 import { DEPTH, Effects } from './effects.js';
 import { Grid } from './grid.js';
-import { Roamer } from './roam.js';
 import { Terrain } from './terrain.js';
 import { SpatialHash } from './spatial.js';
 import { fname, SpriteBank } from './sprites.js';
 import { Unit } from './unit.js';
-import { composeWorld, CORRIDOR } from './world.js';
+import { cropWorld, MARGIN, pickRegion } from './world.js';
 
 const ASSETS = 'assets/';
 // level of detail for units away from the screen
@@ -70,8 +68,7 @@ export class BattleScene extends Phaser.Scene {
     this.bank = new SpriteBank(this, this.db);
     this.effects = new Effects(this, this.db, this.bank, this.rng);
     this.hash = new SpatialHash(64);
-    this.hotspots = new Hotspots(this);
-    this.roamer = new Roamer(this);
+    this.playlist = [];
     this.units = [];
     this.wrecks = [];
     this.airstrikes = [];
@@ -87,10 +84,15 @@ export class BattleScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#000000');
 
     this.rosters = this.buildRosters();
+    // the battlefield is cut to the screen size: a new size needs a new battlefield
     this.scale.on('resize', () => {
       if (!this.world) return;
       clearTimeout(this.resizeTimer);
-      this.resizeTimer = setTimeout(() => this.layoutCamera(), 200);
+      this.resizeTimer = setTimeout(() => {
+        const [w, h] = this.fieldCells();
+        if (w !== this.world.width || h !== this.world.height) this.restart(true);
+        else this.layoutCamera();
+      }, 600);
     });
     this.loadWorld();
 
@@ -104,51 +106,45 @@ export class BattleScene extends Phaser.Scene {
 
   // ------------------------------------------------------------------ world
 
-  worldLayout() {
-    const m = /^(\d+)x(\d+)$/.exec(CONFIG.world);
-    const cols = m ? Math.max(1, Math.min(5, +m[1])) : 3;
-    const rows = m ? Math.max(1, Math.min(4, +m[2])) : 2;
-    return [cols, rows];
+  /** Battlefield size in cells: the screen, plus MARGIN off-screen cells left and right. */
+  fieldCells() {
+    const zoom = this.computeZoom();
+    const vw = Math.ceil(this.scale.width / zoom / 32);
+    const vh = Math.ceil(this.scale.height / zoom / 32);
+    return [vw + 2 * MARGIN, vh];
   }
 
-  /** Choose a tileset and the maps to stitch together. */
-  pickMaps() {
-    const [cols, rows] = this.worldLayout();
-    const n = cols * rows;
+  /**
+   * Next map: a chosen map is always used (with a new region each time); otherwise maps are played
+   * from a shuffled playlist, preferring maps big enough to fill the screen.
+   */
+  nextMapId() {
     const all = this.db.maps.filter((m) => m.id !== 'shellmap');
-    const pool = all.filter((m) => CONFIG.maps === 'all' || m.category === CONFIG.maps);
-    const chosen = CONFIG.map !== 'random' ? all.find((m) => m.id === CONFIG.map) : null;
-    let tileset;
-    if (chosen) {
-      tileset = chosen.tileset;
-    } else {
-      // a different tileset from the current world when rotating
+    if (CONFIG.map !== 'random' && all.some((m) => m.id === CONFIG.map)) return CONFIG.map;
+    if (!this.playlist.length) {
+      const [w, h] = this.fieldCells();
+      const pool = all.filter((m) => CONFIG.maps === 'all' || m.category === CONFIG.maps);
       const src = pool.length ? pool : all;
-      const options = src.filter((m) => m.tileset !== this.world?.tileset);
-      const from = options.length ? options : src;
-      tileset = from[Math.floor(this.rng() * from.length)].tileset;
+      const fits = src.filter((m) => m.width >= w && m.height >= h);
+      const list = (fits.length >= 3 ? fits : src).map((m) => m.id);
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(this.rng() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+      }
+      // do not play the same map twice in a row across a reshuffle
+      if (list.length > 1 && list[0] === this.mapId) list.push(list.shift());
+      this.playlist = list;
     }
-    let candidates = (pool.length ? pool : all).filter((m) => m.tileset === tileset && m.id !== chosen?.id);
-    if (!candidates.length) candidates = all.filter((m) => m.tileset === tileset);
-    // shuffle, then repeat maps if the tileset has fewer than we need
-    const shuffled = [...candidates];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(this.rng() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    const ids = [];
-    for (let i = 0; ids.length < n; i++) ids.push(shuffled[i % shuffled.length].id);
-    if (chosen) ids[Math.floor(n / 2)] = chosen.id; // the chosen map sits in the middle
-    return { cols, rows, ids, tileset };
+    return this.playlist.shift();
   }
 
   loadWorld() {
-    const pick = this.pickMaps();
-    this.pendingWorld = pick;
+    const id = this.nextMapId();
+    const tileset = this.db.maps.find((m) => m.id === id).tileset;
+    this.pendingWorld = { id, tileset };
     let queued = 0;
-    for (const id of new Set(pick.ids)) {
-      const key = `map_${id}`;
-      if (this.cache.json.exists(key)) continue;
+    const key = `map_${id}`;
+    if (!this.cache.json.exists(key)) {
       queued++;
       this.load.json(key, `${ASSETS}maps/${id}.json`);
       this.load.once(`filecomplete-json-${key}`, () => {
@@ -158,9 +154,9 @@ export class BattleScene extends Phaser.Scene {
         }
       });
     }
-    if (!this.textures.exists(`tiles_${pick.tileset}`)) {
+    if (!this.textures.exists(`tiles_${tileset}`)) {
       queued++;
-      this.load.image(`tiles_${pick.tileset}`, `${ASSETS}maps/tiles_${pick.tileset}.png`);
+      this.load.image(`tiles_${tileset}`, `${ASSETS}maps/tiles_${tileset}.png`);
     }
     if (!queued) {
       this.buildWorld();
@@ -171,11 +167,14 @@ export class BattleScene extends Phaser.Scene {
   }
 
   buildWorld() {
-    const { cols, rows, ids, tileset } = this.pendingWorld;
-    const maps = ids.map((id) => ({ id, ...this.cache.json.get(`map_${id}`) }));
+    const { id, tileset } = this.pendingWorld;
+    const map = { id, ...this.cache.json.get(`map_${id}`) };
     const tsInfo = this.db.tilesets?.[tileset] || {};
-    const fill = tsInfo.fill || [maps[0].tiles[0]];
-    const W = composeWorld(maps, cols, rows, fill, tsInfo.groups || [], this.rng);
+    const fill = tsInfo.fill || [map.tiles[0]];
+    const [w, h] = this.fieldCells();
+    const [x0, y0] = pickRegion(map, w, h, this.rng);
+    const W = cropWorld(map, x0, y0, w, h, fill, tsInfo.groups || [], this.rng);
+    this.mapId = id;
     this.world = W;
     this.grid = new Grid(W);
     const T = W.tile;
@@ -228,11 +227,12 @@ export class BattleScene extends Phaser.Scene {
     this.flow = [this.grid.flowField(rightEdge), this.grid.flowField(leftEdge)];
     this.buildSpawnZones();
 
-    this.startBattle();
     this.layoutCamera();
+    this.startBattle();
     this.cullDecor();
-    this.unloadUnused(new Set(ids), tileset);
+    this.unloadUnused(new Set([id]), tileset);
     if (CONFIG.debug) this.drawDebugGrid();
+    this.cameras.main.fadeIn(1500, 0, 0, 0);
   }
 
   decorKey(cx, cy) {
@@ -289,42 +289,33 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  /** Several entry zones along each side's edge of the world. */
+  /** Entry zones: horizontal bands in the off-screen strip on each side. */
   buildSpawnZones() {
     const T = this.world.tile;
-    const [, rows] = this.worldLayout();
-    const count = Math.max(2, rows + 1);
+    const count = 3;
     this.zones = [[], []];
     for (let team = 0; team < 2; team++) {
       for (let k = 0; k < count; k++) {
-        const yc = ((k + 0.5) / count) * this.worldH;
-        const x0 = team === 0 ? T * 0.5 : this.worldW - T * (CORRIDOR - 0.5);
-        const x1 = team === 0 ? T * (CORRIDOR - 0.5) : this.worldW - T * 0.5;
-        const half = (this.worldH / count) * 0.35;
-        this.zones[team].push({ x0, x1, y0: yc - half, y1: yc + half });
+        const y0 = (k / count) * this.worldH;
+        const x0 = team === 0 ? T * 0.5 : this.worldW - T * (MARGIN - 0.5);
+        const x1 = team === 0 ? T * (MARGIN - 0.5) : this.worldW - T * 0.5;
+        this.zones[team].push({ x0, x1, y0: y0 + T, y1: y0 + this.worldH / count - T });
       }
     }
   }
 
-  /**
-   * Wide view: whole-number zoom only, so every world pixel covers the same number of screen pixels
-   * (a fractional zoom makes objects jiggle while panning). 1x up to 1440p, 2x from 4K.
-   */
+  /** Whole-number zoom, so every game pixel covers the same number of screen pixels: 1x up to 1440p, 2x on 4K. */
   computeZoom() {
     if (CONFIG.zoom > 0) return CONFIG.zoom;
     return Math.max(1, Math.floor(Math.min(this.scale.width / 1600, this.scale.height / 900)));
   }
 
-  /** Place the camera; `jump` starts it on the biggest fight (new world). */
-  layoutCamera(jump = true) {
+  /** The camera never moves: it shows the battlefield minus the off-screen side strips. */
+  layoutCamera() {
     const cam = this.cameras.main;
     cam.setZoom(this.computeZoom());
     cam.setRoundPixels(true);
-    if (jump) {
-      const h = this.hotspots.best();
-      centerSnapped(cam, h ? h[0] : this.worldW / 2, h ? h[1] : this.worldH / 2);
-    }
-    this.roamer.reset();
+    centerSnapped(cam, this.worldW / 2, this.worldH / 2);
     this.updateView();
   }
 
@@ -371,8 +362,9 @@ export class BattleScene extends Phaser.Scene {
     this.exits = [0, 0];
     this.boost = [1, 1];
 
-    const [cols, rows] = this.worldLayout();
-    this.baseCap = CONFIG.units || Math.round(36 * Math.sqrt(cols * rows));
+    // about 30 units per side on a 1080p-sized battlefield, scaled with the visible area
+    const area = (this.view.w * this.view.h) / (1920 * 1080);
+    this.baseCap = CONFIG.units || Math.max(12, Math.round(30 * area));
     this.cap = [this.baseCap, this.baseCap];
     this.waveTimer = [800, 1600];
     this.balanceT = 0;
@@ -387,20 +379,9 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * Where a reinforcement wave enters. Most waves feed the fight on screen (arriving from just beyond the
-   * screen edge, behind their own side), the rest go to a random route elsewhere in the world.
-   */
+  /** Where a reinforcement wave enters: one of the bands of the team's off-screen strip. */
   waveZone(team) {
     const zones = this.zones[team];
-    if (this.rng() < 0.75) {
-      const v = this.view;
-      // the camera keeps drifting: aim for where it will be in a few seconds
-      const ahead = 10;
-      const cx = Math.max(v.w / 2, Math.min(this.worldW - v.w / 2, v.x + v.w / 2 + (this.roamer.vx * ahead)));
-      const cy = Math.max(v.h / 2, Math.min(this.worldH - v.h / 2, v.y + v.h / 2 + (this.roamer.vy * ahead)));
-      return { y0: cy - v.h / 2 + 40, y1: cy + v.h / 2 - 40, front: cx };
-    }
     return zones[Math.floor(this.rng() * zones.length)];
   }
 
@@ -415,14 +396,9 @@ export class BattleScene extends Phaser.Scene {
         x = team === 0 ? this.worldW * frac : this.worldW * (1 - frac);
         y = this.worldH * (0.04 + this.rng() * 0.92);
       } else {
-        // reinforcements arrive behind their own side's front on this route, from off-screen
+        // reinforcements arrive in the off-screen strip on their side and march in
+        x = zone.x0 + this.rng() * (zone.x1 - zone.x0);
         y = zone.y0 + this.rng() * (zone.y1 - zone.y0);
-        const back = 600 + this.rng() * 500;
-        const front = zone.front ?? this.worldW / 2;
-        const margin = this.world.tile * 0.5;
-        x = team === 0 ? front - back : front + back;
-        if (this.inView(x, y, 80)) x = team === 0 ? this.view.x - 80 - this.rng() * 200 : this.view.x + this.view.w + 80 + this.rng() * 200;
-        x = Math.max(margin, Math.min(this.worldW - margin, x));
       }
       const [cx, cy] = g.cellOf(x, y);
       if (g.isBlockedCell(cx, cy)) continue;
@@ -453,7 +429,6 @@ export class BattleScene extends Phaser.Scene {
     target.hp -= amount * CONFIG.lethality;
     if (target.hp <= 0) {
       target.die(source);
-      this.hotspots.note(target.x, target.y, target.kind === 'vehicle' ? 3 : 1);
       if (source && source.team >= 0) this.kills[source.team]++;
     }
   }
@@ -481,7 +456,6 @@ export class BattleScene extends Phaser.Scene {
     for (let i = 0; i < hit.length; i++) this.damage(hit[i], weapon.damage[hit[i].kind] ?? 100, source);
     this.impact(weapon, x, y);
     if (weapon.smudge) {
-      this.hotspots.note(x, y, 0.5);
       if (this.rng() < 0.35 && !this.grid.isBlockedAt(x, y)) {
         this.effects.decal(`crater_${'abcdefghi'[Math.floor(this.rng() * 9)]}`, x, y + 4);
       }
@@ -704,8 +678,6 @@ export class BattleScene extends Phaser.Scene {
       this.airstrikes = this.airstrikes.filter((s) => !s.done);
     }
 
-    this.roamer.update(dt);
-    this.hotspots.tick(dt);
 
     this.updateView();
     this.terrain?.update(this.view);
@@ -738,10 +710,11 @@ export class BattleScene extends Phaser.Scene {
     this.time.timeScale = CONFIG.speed;
     this.rosters = this.buildRosters();
     if (newWorld) {
+      this.playlist = [];
       this.loadWorld();
     } else {
-      this.startBattle();
       this.layoutCamera();
+      this.startBattle();
     }
   }
 
@@ -781,14 +754,12 @@ export class BattleScene extends Phaser.Scene {
     this.mapTimer = CONFIG.rotate > 0 ? CONFIG.rotate * 60000 : Infinity;
   }
 
+  /** Fade to black, build the next battlefield (which fades itself back in). */
   rotateWorld() {
     this.mapTimer = Infinity;
     const cam = this.cameras.main;
     cam.fadeOut(1500, 0, 0, 0);
-    cam.once('camerafadeoutcomplete', () => {
-      this.loadWorld();
-      cam.fadeIn(1500, 0, 0, 0);
-    });
+    cam.once('camerafadeoutcomplete', () => this.loadWorld());
   }
 
   drawDebugGrid() {

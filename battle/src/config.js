@@ -14,22 +14,18 @@ function str(name, def) {
 }
 
 export const CONFIG = {
-  /** Map id to put in the middle of the world (see assets/units.json "maps"), or 'random'. */
+  /** Map to cut battlefields from (see assets/units.json "maps"), or 'random' for a playlist of all maps. */
   map: str('map', 'random'),
-  /** World size in maps (columns x rows) stitched together, e.g. 3x2. */
-  world: str('world', '3x2'),
-  /** Camera panning speed in world pixels per second. */
-  pan: num('pan', 22),
   /** Map categories used when map=random: 'classic', 'multiplayer' or 'all'. */
   maps: str('maps', 'all'),
   /** Integer pixel zoom; 0 = automatic (1x up to 1440p, 2x on 4K). */
   zoom: num('zoom', 0),
-  /** Base max units alive per team; 0 = automatic from world size. */
+  /** Base max units alive per team; 0 = automatic from screen size. */
   units: num('units', 0),
   /** Comma-separated faction for each team: survivors | evolved | mixed. */
   teams: str('teams', 'survivors,evolved').split(','),
-  /** Minutes between switching to another map / location (0 = never). */
-  rotate: num('rotate', 12),
+  /** Minutes per battlefield before fading to the next one (0 = never change). */
+  rotate: num('rotate', 15),
   /** Average minutes between airstrikes (bomber / wasp), 0 = off. */
   airstrike: num('airstrike', 2),
   /** Seconds between reinforcement waves (average). */

@@ -11,24 +11,21 @@ const db = JSON.parse(fs.readFileSync(path.join(root, 'public', 'assets', 'units
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 
 // keep in sync with src/wallpaper.js
-const WORLD_LABELS = ['3 x 2 maps (large)', '2 x 2 maps', '3 x 1 maps (wide)', '4 x 2 maps (huge)', '2 x 1 maps', '1 map'];
 const TEAM_LABELS = ['Survivors vs Evolved', 'Mixed vs Mixed', 'Survivors civil war', 'Evolved civil war'];
 const maps = db.maps.filter((m) => m.id !== 'shellmap');
-const mapItems = ['Random (rotates)', ...maps.map((m) => `${m.title} (${m.category}, ${m.tileset})`)];
+const mapItems = ['All maps (a new one each rotation)', ...maps.map((m) => `${m.title} (${m.category}, ${m.tileset})`)];
 
 const props = [
-  { name: 'map', kind: 'dropdown', text: 'Centre map (others from the same tileset are added around it)', value: 0, items: mapItems },
-  { name: 'world', kind: 'dropdown', text: 'World size', value: 0, items: WORLD_LABELS },
+  { name: 'map', kind: 'dropdown', text: 'Map', value: 0, items: mapItems },
   { name: 'teams', kind: 'dropdown', text: 'Armies', value: 0, items: TEAM_LABELS },
   { name: 'zoom', kind: 'slider', text: 'Pixel zoom (0 = auto: 1x up to 1440p, 2x on 4K)', value: 0, min: 0, max: 5, step: 1 },
-  { name: 'units', kind: 'slider', text: 'Base units per side (0 = auto from world size)', value: 0, min: 0, max: 120, step: 1 },
+  { name: 'units', kind: 'slider', text: 'Units per side (0 = auto from screen size)', value: 0, min: 0, max: 120, step: 1 },
   { name: 'vehicles', kind: 'checkbox', text: 'Vehicles', value: true },
   { name: 'lethality', kind: 'slider', text: 'Lethality', value: 0.9, min: 0.3, max: 4, step: 0.1 },
   { name: 'wave', kind: 'slider', text: 'Seconds between reinforcement waves', value: 8, min: 2, max: 30, step: 1 },
-  { name: 'rotate', kind: 'slider', text: 'Minutes before a new world (0 = never)', value: 12, min: 0, max: 120, step: 1 },
+  { name: 'rotate', kind: 'slider', text: 'Minutes per battlefield (0 = never change)', value: 15, min: 0, max: 120, step: 1 },
   { name: 'airstrike', kind: 'slider', text: 'Minutes between airstrikes (0 = off)', value: 2, min: 0, max: 15, step: 0.5 },
   { name: 'corpses', kind: 'slider', text: 'Seconds corpses and wrecks stay', value: 25, min: 3, max: 120, step: 1 },
-  { name: 'pan', kind: 'slider', text: 'Camera panning speed', value: 22, min: 5, max: 120, step: 1 },
   { name: 'speed', kind: 'slider', text: 'Game speed', value: 1, min: 0.25, max: 3, step: 0.25 },
   { name: 'fps', kind: 'dropdown', text: 'Frame rate', value: 0, items: ['60 fps', '30 fps (less CPU/GPU)'] },
 ];

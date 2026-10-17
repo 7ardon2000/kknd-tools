@@ -2,16 +2,15 @@
 
 An endless KKnD battle as your desktop background.
 
-Several classic KKnD maps of one tileset are stitched into one large battlefield (3 × 2 maps by default,
-roughly a hundred screens). Survivors and Evolved pour in from opposite ends along several routes, and
-fronts form wherever they meet. Units fight with their real weapons and animations: muzzle flashes,
-rockets with smoke trails, flamethrowers, beetle spit, tank shells, burning and exploding deaths, craters
-and wrecks. Units that break through march on and leave at the far edge. The side being pushed back
-reinforces harder and launches offensives, so the front swings back and forth. Now and then the losing
-side calls in a Wilbur bomber or a Wasp. Every 12 minutes a new world is built.
+Each battlefield is a screen-sized piece of one of the 35 classic KKnD maps, shown with a still camera,
+so your icons and windows stay calm on top of it. Survivors march in from the left edge of the screen
+and Evolved from the right, and fronts form wherever they meet. Units fight with their real weapons
+and animations: muzzle flashes, rockets with smoke trails, flamethrowers, beetle spit, tank shells,
+burning and exploding deaths, craters and wrecks. Units that break through march on and leave at the
+far edge. The side being pushed back reinforces harder and launches offensives, so the front swings
+back and forth. Now and then the losing side calls in a Wilbur bomber or a Wasp.
 
-The camera drifts slowly across the battlefield, showing several fights at once, and bounces off the
-edges of the world.
+Every 15 minutes the screen fades to black and fades back in on a new battlefield from a different map.
 
 It is a web page (Phaser 3), so it runs in **Lively Wallpaper** (free, Windows), **Wallpaper Engine**
 or any browser.
@@ -43,22 +42,20 @@ loading files over `file://`.
 ## Settings
 
 Lively and Wallpaper Engine show these in their settings panel. In a browser, add them to the address,
-for example `index.html?map=desertstorm&world=2x2&teams=mixed,mixed`.
+for example `index.html?map=desertstorm&rotate=5&teams=mixed,mixed`.
 
 | Setting | URL parameter | Default | What it does |
 |---|---|---|---|
-| Centre map | `map` | random | Map placed in the middle of the world; the others come from the same tileset (`desertstorm`, `highlandjig`, `urbaneassault`, ...) |
-| World size | `world` | `3x2` | How many maps are stitched together (columns × rows): `1x1` up to `4x2` |
+| Map | `map` | all | One map to always use (a new part of it each rotation), or all maps in a shuffled playlist (`desertstorm`, `highlandjig`, `urbaneassault`, ...) |
 | Armies | `teams` | `survivors,evolved` | Faction per side: `survivors`, `evolved` or `mixed` |
-| Pixel zoom | `zoom` | auto | Whole-number zoom; auto is 1× up to 1440p and 2× on 4K |
-| Units per side | `units` | auto | Base unit cap per side (auto scales with world size) |
+| Pixel zoom | `zoom` | auto | Whole-number zoom; auto is 1× up to 1440p and 2× on 4K. Higher zoom = bigger units, smaller battlefield |
+| Units per side | `units` | auto | Base unit cap per side (auto: about 30 on a 1080p screen, scaled with screen area) |
 | Vehicles | `vehicles` | on | Off = infantry only |
 | Lethality | `lethality` | `0.9` | Damage multiplier: higher means shorter, bloodier fights |
 | Reinforcements | `wave` | `8` | Average seconds between reinforcement waves |
-| New world every | `rotate` | `12` | Minutes before a new world is built (`0` = never) |
+| Battlefield every | `rotate` | `15` | Minutes before fading to the next battlefield (`0` = never) |
 | Airstrikes | `airstrike` | `2` | Average minutes between airstrikes (`0` = off) |
 | Corpses stay | `corpses` | `25` | Seconds corpses stay on the ground |
-| Camera speed | `pan` | `22` | Camera panning speed (world pixels per second) |
 | Game speed | `speed` | `1` | Speed of the whole battle |
 | Frame rate | `fps` | `60` | `30` uses roughly half the CPU/GPU |
 
@@ -86,18 +83,16 @@ The zip contains the built page plus `LivelyInfo.json`, `LivelyProperties.json` 
 | File | Role |
 |---|---|
 | `main.js` | Phaser setup, pixel-exact canvas sizing, full-precision shaders |
-| `battle.js` | The scene: loads and builds the world, spawning and waves, damage, front lines and offensives, airstrikes, culling |
+| `battle.js` | The scene: map playlist and rotation, battlefield building, spawning and waves, damage, front lines and offensives, airstrikes, culling |
 | `unit.js` | One unit: targeting, movement, turning, turrets, firing, deaths |
 | `effects.js` | Animated effects, projectiles, debris, craters |
-| `world.js` | Stitches maps into one world and fills the gaps between them |
-| `terrain.js` | Soft ground: feathers hard tile seams near the camera |
+| `world.js` | Picks a screen-sized region of a map and cuts it out (fills the gap if the map is smaller than the screen) |
+| `terrain.js` | Soft ground: feathers hard tile seams |
 | `grid.js` | Passability, line of sight, flow fields |
-| `roam.js` | The camera |
-| `hotspots.js` | Finds the biggest fight (where a new world's camera starts) |
 | `airstrike.js` | Bomber / Wasp flyover and bomb |
 | `spatial.js` | Spatial hash for neighbour queries |
 | `sprites.js` | Facings, frame indices, MOBD points |
-| `snap.js` | Keeps the camera on whole screen pixels |
+| `snap.js` | Puts the camera on whole screen pixels |
 | `wallpaper.js` | Settings from Lively / Wallpaper Engine |
 | `config.js` | Defaults and URL parameters |
 
@@ -111,18 +106,23 @@ The zip contains the built page plus `LivelyInfo.json`, `LivelyProperties.json` 
   open-source KKnD engine. Its `openkrush_gen1` mod describes every unit (animations per facing, HP,
   speed, weapon range, reload, burst, projectile, muzzle flash, death) and contains the palette,
   tilesets and the 35 maps in OpenRA format.
-* **Battle.** Flow fields lead each side to the far edge around cliffs, water and buildings. Each route
-  has its own front line. Waves arrive behind their side's front (mostly where the camera is heading),
-  and units off-screen march faster so reinforcements reach the fighting sooner.
-* **Smooth panning.** The canvas uses the screen's real pixel resolution even with Windows display
-  scaling, zoom is always a whole number, the camera moves one whole pixel at a time on exact diagonals,
-  and every sprite sits on whole pixels. Without all four, pixel art shimmers or jiggles while panning.
-* **Soft terrain.** Where stitched maps meet, or tiles meet that were never meant to touch, the hard
-  seam is feathered over about 30 px. Designed edges (cliffs, roads, dunes) are detected and stay sharp.
-* **Staying light on long runs.** Map objects away from the view are taken out of the display list.
-  Off-screen units update about 5 times a second instead of every frame, and off-screen effects are not
-  created (their hits still land). Corpses, craters and wrecks fade out. Each new world unloads the
-  previous world's map data and textures. Game logic costs about 0.2 ms per frame.
+* **Battlefields.** Each one is a region of a map exactly the size of the screen, plus 4 off-screen
+  cells on the left and right where reinforcements spawn and where units leave. The region is chosen
+  for open fighting ground with some terrain and objects, and must have a route from side to side.
+  Maps play from a shuffled playlist; maps smaller than the screen get their edges extended with their
+  own ground.
+* **Battle.** Flow fields lead each side to the far edge around cliffs, water and buildings. The
+  battlefield is split into three lanes, each with its own front line.
+* **Pixel-exact.** The canvas uses the screen's real pixel resolution even with Windows display
+  scaling, zoom is always a whole number, and every sprite sits on whole pixels, so the pixel art stays
+  crisp.
+* **Soft terrain.** Where tiles meet that were never meant to touch (maps cut through a feature, blocky
+  patches), the hard seam is feathered over about 30 px. Designed edges (cliffs, roads, dunes) are
+  detected and stay sharp.
+* **Staying light on long runs.** Units in the off-screen strips update about 5 times a second, and
+  effects there are not created (their hits still land). Corpses, craters and wrecks fade out. Each
+  new battlefield unloads the previous map's data and textures; memory stays flat (about 14 MB of
+  JavaScript heap). Game logic costs about 0.5 ms per frame.
 
 ## Credits
 
